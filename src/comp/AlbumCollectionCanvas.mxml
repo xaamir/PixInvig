@@ -1,0 +1,287 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:mx="http://www.adobe.com/2006/mxml"
+		   xmlns:comp="comp.*" initialize="onInit()" 
+		   width="760" height="500" horizontalScrollPolicy="off" verticalScrollPolicy="off">
+	<mx:Script>
+		<![CDATA[
+			import actionObj.event.ImageMoveEffect;
+			import actionObj.graphics.Coordinate;
+			import actionObj.graphics.Rectangle;
+			import actionObj.image.Album;
+			import actionObj.image.Image_;
+			import actionObj.image.Photo;
+			import actionObj.image.PhotoCollection;
+			
+			import mx.collections.ArrayCollection;
+			import mx.collections.ArrayList;
+			import mx.controls.Image;
+			import mx.core.FlexGlobals;
+			import mx.effects.Effect;
+			import mx.effects.Fade;
+			import mx.effects.Glow;
+			import mx.effects.Move;
+			import mx.effects.Parallel;
+			import mx.events.EffectEvent;
+			
+			import utilities.AlbumCoordHelper;
+			
+			static public var fileRefList:FileReference = new FileReference();			
+			private var picQueue:ArrayList = new ArrayList();
+			
+			private var currentPageNum:int=0;
+			private var coordHelper:AlbumCoordHelper = new AlbumCoordHelper();
+			
+			public function setAlbums(albumCollection:ArrayCollection):void {
+				for each (var album:Album in albumCollection){
+					setAlbumCoord(album);
+					var loadCount:int=album.getPhotoCollection().getCount() > 3? 3: album.getPhotoCollection().getCount();
+					for (var i:int = 0; i < loadCount; i++) {
+						setPic(album.getPhoto(i));
+					}
+				}
+			}
+			
+	
+			public function setPic(photo:Photo): void{
+				this.picQueue.addItem(photo);
+			}
+			
+			private function onInit():void{
+				var loadPicsTimer:Timer = new Timer(200, 0);
+				loadPicsTimer.addEventListener(TimerEvent.TIMER, onLoadTick);
+				loadPicsTimer.start();				
+			}
+
+			public function onLoadTick(e:TimerEvent):void{
+				if (picQueue.length!=0) {
+					var numPicked:int = picQueue.length > 3? 3: picQueue.length;
+					for (var i:int = picQueue.length - 1; i >=picQueue.length - numPicked; i--) {
+						var photo:Photo =  Photo (picQueue.getItemAt(i));
+						var coordStr:String = returnAlbumCoord(photo.getAlbum());
+						if(coordStr!=null) {
+							var albumRect:actionObj.graphics.Rectangle = this.coordHelper.getCoordMap()[coordStr];
+							loadPhotoOnCanvas(photo, albumRect.topLeft);
+						}
+					}
+					for (var i:int = picQueue.length - 1; i >=picQueue.length - numPicked; i--) {
+						picQueue.removeItem(photo);
+					}
+
+				}
+			}
+			
+			
+			private function loadPhotoOnCanvas(photo:Photo, coord:Coordinate):void {
+				if(photo.getAlbum().getPhoto(0)!=null && photo.getId()==photo.getAlbum().getPhoto(0).getId() && 
+					photo.getAlbum().getPhoto(0).isFullPicLoaded()
+						&& !photo.isLoadedOnCanvas()) {
+					photo.setLoadedOnCanvas(true);
+					loadTopImage(photo.getAlbum().getTopImageSrc(-2), photo.getAlbum(), coord);
+				}
+				if(photo.getAlbum().getPhoto(1)!=null && photo.getId()==photo.getAlbum().getPhoto(1).getId() && 
+					photo.getAlbum().getPhoto(1).isFullPicLoaded()
+						&& !photo.isLoadedOnCanvas()) {
+					photo.setLoadedOnCanvas(true);
+					loadMidImage(photo.getAlbum().getMidImageSrc(2), photo.getAlbum(), coord);					
+				} 
+				if(photo.getAlbum().getPhoto(2)!=null && photo.getId()==photo.getAlbum().getPhoto(2).getId() && 
+					photo.getAlbum().getPhoto(2).isFullPicLoaded()
+						&& !photo.isLoadedOnCanvas()) {
+					photo.setLoadedOnCanvas(true);
+					loadBottomImage(photo.getAlbum().getBottomImageSrc(0), photo.getAlbum(), coord);					
+				}
+			}
+			
+			private function loadTopImage(topImgBM:Bitmap, album:Album, albumCoord:Coordinate):void {
+				var albumImgTop:AlbumImg = new AlbumImg();
+				albumImgTop.source=topImgBM;
+				albumImgTop.x = albumCoord.x;
+				albumImgTop.y = albumCoord.y;
+				this.addChildAt(albumImgTop,0);
+				var coord:Coordinate = new Coordinate(albumCoord.x, albumCoord.y);
+				moveImageToLocation(albumImgTop, album, coord, true);			
+				albumImgTop.addEventListener(MouseEvent.CLICK, onClickAlbumImage);
+				albumImgTop.addEventListener(MouseEvent.MOUSE_OVER, onMouseOverTopImage);
+				albumImgTop.addEventListener(MouseEvent.MOUSE_OUT, onMouseOutTopImage);
+				albumImgTop.setAlbum(album);
+			}
+			
+			public function onMouseOverTopImage(event:Event):void{
+				var albumImg:AlbumImg = AlbumImg (event.currentTarget);
+				albumImg.source = albumImg.getAlbum().getTopImageSrc(0);
+				albumImg.getAlbum().getButton().filters = null;
+				var f:DropShadowFilter = new DropShadowFilter(7,56,0,.8);
+				var myFilters:Array = new Array();
+				myFilters.push(f);
+				albumImg.getAlbum().getButton().filters=myFilters;
+				albumImg.filters=null;
+				albumImg.filters=myFilters;
+			}
+			
+			public function onMouseOutTopImage(event:Event):void{
+				var albumImg:AlbumImg = AlbumImg (event.currentTarget);	
+				albumImg.source = albumImg.getAlbum().getTopImageSrc(-2);
+				albumImg.getAlbum().getButton().filters = null;					
+			}
+			
+			private function loadMidImage(midImgBM:Bitmap, album:Album, albumCoord:Coordinate):void {
+				var albumImgMid:AlbumImg = new AlbumImg();
+				albumImgMid.source=midImgBM;
+				this.addChildAt(albumImgMid, 0);
+				var coord:Coordinate = new Coordinate(albumCoord.x + 100, albumCoord.y + 50);
+				moveImageToLocation(albumImgMid, album, coord);			
+				albumImgMid.setAlbum(album);
+				albumImgMid.addEventListener(MouseEvent.MOUSE_OVER, onMouseOverMidImage);
+				albumImgMid.addEventListener(MouseEvent.MOUSE_OUT, onMouseOutMidImage);
+				albumImgMid.addEventListener(MouseEvent.CLICK, onClickAlbumImage);
+			}
+
+			public function onMouseOverMidImage(event:Event):void{
+				var albumImg:AlbumImg = AlbumImg (event.currentTarget);
+				albumImg.source = albumImg.getAlbum().getMidImageSrc(0);
+				albumImg.getAlbum().getButton().filters = null;
+				var f:DropShadowFilter = new DropShadowFilter(7,56,0,.8);
+				var myFilters:Array = new Array();
+				myFilters.push(f);
+				albumImg.getAlbum().getButton().filters=myFilters;
+				albumImg.filters=null;
+				albumImg.filters=myFilters;
+			}
+			
+			public function onMouseOutMidImage(event:Event):void{
+				var albumImg:AlbumImg = AlbumImg (event.currentTarget);	
+				albumImg.source = albumImg.getAlbum().getTopImageSrc(2);
+				albumImg.getAlbum().getButton().filters = null;					
+			}
+
+			private function loadBottomImage(bottomImgBM:Bitmap, album:Album, albumCoord:Coordinate):void {
+				var albumImgBottom:AlbumImg = new AlbumImg();
+				albumImgBottom.source=bottomImgBM;
+				var coord:Coordinate = new Coordinate(albumCoord.x + 50, albumCoord.y + AlbumCoordHelper.BOTTOM_IMG_Y_INCR);
+				this.addChildAt(albumImgBottom, 0);
+				moveImageToLocation(albumImgBottom, album, coord);
+				albumImgBottom.setAlbum(album);
+				albumImgBottom.addEventListener(MouseEvent.CLICK, onClickAlbumImage);
+			}
+			
+			private function moveImageToLocation(albumImg:AlbumImg, album:Album, targetCoord:Coordinate, bTrapEndEvent:Boolean = false): void {
+				var compEff:Parallel = new Parallel();
+				var movePic:ImageMoveEffect = new ImageMoveEffect(albumImg);
+				movePic.setAlbum(album);
+				movePic.duration=2000;
+				movePic.yFrom = this.height/2;
+				movePic.xFrom = this.width/2;
+				movePic.yTo = targetCoord.y;
+				movePic.xTo = targetCoord.x;
+				compEff.addChild(movePic);
+				var fadePic:Fade = new Fade(albumImg);
+				fadePic.duration=2000;
+				fadePic.alphaFrom = 0;
+				fadePic.alphaTo = 1;
+				compEff.addChild(fadePic);
+				if (bTrapEndEvent) {
+					movePic.addEventListener(EffectEvent.EFFECT_END, onMoveLocationEnd);
+				}
+				compEff.play();			
+			}
+			
+			private function onMoveLocationEnd(effectEvent:EffectEvent): void {
+				var moveEffect:ImageMoveEffect = ImageMoveEffect (effectEvent.currentTarget)
+				var albumNameButton:AlbumNameButton = moveEffect.getAlbum().getButton();
+				this.addChild(albumNameButton);
+				/*var fadeButton:Fade = new Fade(albumNameButton);
+				fadeButton.duration=2000;
+				fadeButton.alphaFrom = 0;
+				fadeButton.alphaTo = 1;
+				fadeButton.play();*/
+				var finalY:int = albumNameButton.y;
+				var movePic:Move = new Move(albumNameButton);
+				movePic.duration=500;
+				movePic.yFrom = finalY - 100;
+				movePic.yTo = finalY;
+				movePic.play();
+			}
+			
+			private function setAlbumUsingCoord(album:Album): void{
+				var photoCollection: PhotoCollection = album.getPhotoCollection();
+				photoCollection.getCount()
+				for (var i:int = 0; i < photoCollection.getCount(); i++) {
+					photoCollection.getPhoto(i).setLoadedOnCanvas(false);
+				}
+				var albumButton:AlbumNameButton = new AlbumNameButton();
+				albumButton.label = album.getName();
+				albumButton.setAlbum(album);
+				
+				var midImgY:int = Image_.album_image_width * 0.66; var topImgY:int = Image_.album_image_width * 0.66; var bottomImgY:int=Image_.album_image_width * 0.66;
+				var midImgX:int = Image_.album_image_width; var topImgX:int = Image_.album_image_width; var bottomImgX:int=Image_.album_image_width;
+						
+				var maxDepth:int=bottomImgY + AlbumCoordHelper.BOTTOM_IMG_Y_INCR;
+				if(this.coordHelper.isfixedCoordUsed()) {
+					maxDepth=midImgY;
+				}
+				else if(midImgY  > maxDepth) {
+					maxDepth = midImgY;
+				}
+				if(topImgY > maxDepth) {
+					maxDepth=topImgY;
+				}
+				var maxWidth:int = midImgX + 100;
+				if(topImgX > maxWidth) {
+					maxWidth = topImgX;
+				}
+				if(bottomImgX + 50 > maxWidth) {
+					maxWidth=bottomImgX + 50;
+				}
+				var albumCoord:Coordinate;
+				if(!this.coordHelper.isfixedCoordUsed()) {
+					albumCoord = this.coordHelper.findFixedCoordinates(album, maxWidth, maxDepth + albumButton.height 
+						+ AlbumCoordHelper.BUTTON_DISTANCE);
+				}
+				else {
+					albumCoord = this.coordHelper.findFlexibleCoordinates(album, maxWidth, maxDepth 
+						+ albumButton.height + AlbumCoordHelper.BUTTON_DISTANCE);						
+				}
+				if(maxWidth > albumButton.width){
+					albumButton.x= albumCoord.x + (maxWidth/2 - albumButton.width/2);					
+				}
+				else{
+					albumButton.width=maxWidth;
+					albumButton.x= albumCoord.x;					
+				}
+				albumButton.y= albumCoord.y + maxDepth + albumButton.height + AlbumCoordHelper.BUTTON_DISTANCE;
+				albumButton.addEventListener(MouseEvent.CLICK, onClickAlbum);
+				album.setButton(albumButton);
+			}
+			
+			public function onClickAlbumImage(event:MouseEvent):void {
+				var albumImg:AlbumImg = AlbumImg (event.currentTarget);
+				FlexGlobals.topLevelApplication.loadAlbum(albumImg.getAlbum());
+			}
+			
+			public function onClickAlbum(event:MouseEvent):void {
+				var albumButton:AlbumNameButton = AlbumNameButton (event.currentTarget);
+				FlexGlobals.topLevelApplication.loadAlbum(albumButton.getAlbum());
+			}
+			
+			public function setAlbumCoord(album:Album): void{
+				if(album.getPhotoCollection().getCount() < 1) {
+					return;
+				}
+				var coordStr:String = returnAlbumCoord(album);
+				if(coordStr==null  && !this.coordHelper.isFlexCoordUsed()) {
+					this.setAlbumUsingCoord(album);	
+				}				
+			}
+			
+			public function returnAlbumCoord(album:Album):String{
+				for (var coord:String in this.coordHelper.getCoordMap()) {
+					var coordAlbum:Album = this.coordHelper.getAlbumCoordMap()[coord]; 
+					if (coordAlbum.getName()==album.getName()) {
+						return coord;
+					}
+				}
+				return null;
+			}
+		]]>		
+	</mx:Script>
+</mx:Canvas>

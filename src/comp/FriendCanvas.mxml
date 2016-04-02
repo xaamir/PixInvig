@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:mx="http://www.adobe.com/2006/mxml" width="250" height="30" horizontalScrollPolicy="off" mouseOver="onMouseRollOver(event)"
+		 verticalScrollPolicy="off" click="onClick(event)"  creationComplete="onInit()" xmlns:comp="comp.*">
+	<mx:Image id="FriendImg" x="3" y="3" width="25" height="25"/>
+	<mx:Label id="FriendName" x="35" y="2" width="172" height="26" text="{data.name}"  fontFamily="Arial"/>
+	<mx:CheckBox id="selectedBox" x="221" y="6" width="16" click="onClick(event)"/>
+	<mx:Script>	
+		<![CDATA[
+			import actionObj.event.ClickFriendEvent;
+			import actionObj.event.SelectFriendEvent;
+			import actionObj.image.Friend;
+			
+			import mx.core.Application;
+			import mx.core.FlexGlobals;
+			
+			public function onInit():void{
+				setImage();
+			}
+			
+			public function onClick(event:Event):void{
+				var friend:Friend = Friend(data);
+				selectCheckBox();
+				var clickFriendEvent:ClickFriendEvent = new ClickFriendEvent("ClickFriendEvent", friend, selectedBox.selected);
+				dispatchEvent(clickFriendEvent);
+			}
+
+			public function selectCheckBox():void{
+				selectedBox.selected=true
+				selectedBox.enabled=false;				
+			}
+			
+			public function setImage():void{
+				if(data!=null){
+					FriendImg.source=data.setImage();
+				}
+			}
+			
+			public function onMouseRollOver(event:MouseEvent):void{
+				var friend:Friend = Friend(data);
+				var selectFriendEvent:SelectFriendEvent = new SelectFriendEvent("SelectFriendEvent", this, friend);
+				dispatchEvent(selectFriendEvent);
+			}
+			
+			public function onMouseOut():void{
+			}
+			
+		]]>		
+	</mx:Script>
+</mx:Canvas>

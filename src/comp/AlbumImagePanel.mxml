@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:mx="http://www.adobe.com/2006/mxml"
+		  xmlns:comp="comp.*" horizontalScrollPolicy="off" removedFromStage="onRemove()" addedToStage="onInit()" 
+		  verticalScrollPolicy="off" borderThickness="0" focusEnabled="true" 
+		  width="145" height="145" backgroundAlpha="0.0" borderStyle="none">
+	<comp:AlbumImg x="0" y="0" id="AlbumImg" source="{data.returnImageSource()}"/>
+	
+	<mx:Script>
+		<![CDATA[
+			import actionObj.image.Image_;
+			
+			import mx.core.Application;
+			import mx.core.FlexGlobals;
+			import mx.core.UIComponent;
+			import mx.effects.Glow;
+			public var imageHitArea:UIComponent = null;
+			public var imageSelectBox:UIComponent=null;
+			
+			private function createHitArea():void{//totally transparent area covering only the image
+				try{
+					imageHitArea = new UIComponent();
+					var grainSize:int = 5;
+					imageHitArea.graphics.beginFill(0x000000, 0);	
+					for(var _x:uint=0;_x<AlbumImg.source.bitmapData.width;_x+=grainSize) {
+						for(var _y:uint=grainSize;_y<AlbumImg.source.bitmapData.height;_y+=grainSize) {					
+							if(_x<=AlbumImg.source.bitmapData.width && _y<=AlbumImg.source.bitmapData.height && AlbumImg.source.bitmapData.getPixel32(_x,_y)!=0) {
+								imageHitArea.graphics.drawRect(_x,_y,grainSize,grainSize);						
+							}					
+						}
+					}			
+					imageHitArea.graphics.endFill();
+					imageHitArea.focusEnabled=true;
+					imageHitArea.addEventListener(MouseEvent.ROLL_OVER, onFocusHitArea);
+					imageHitArea.addEventListener(MouseEvent.ROLL_OUT, onDeFocusHitArea);
+					imageHitArea.addEventListener(MouseEvent.MOUSE_DOWN, onSelectHitArea);
+					AlbumImg.addChild(imageHitArea);
+				}
+				catch (e:Error){//keep getting invalid bitmap data - have not understood the cause: aq 11/08
+					trace("exception in create hit area:" + e.toString());
+				}
+			}
+			
+			public function onFocus(event:MouseEvent):void{
+				if(imageHitArea==null){
+					createHitArea();
+				}
+			}
+			
+			public function onRemove():void{
+				if(imageHitArea){
+					imageHitArea.removeEventListener(MouseEvent.ROLL_OVER, onFocusHitArea);
+					imageHitArea.removeEventListener(MouseEvent.ROLL_OUT, onDeFocusHitArea);
+					imageHitArea.removeEventListener(MouseEvent.MOUSE_DOWN, onSelectHitArea);
+					imageHitArea=null;
+				}
+				for (var i:uint=0; i < AlbumImg.numChildren; i++){					
+					AlbumImg.removeChildAt(i);
+				}
+			}
+						
+			public function onSelect(event:MouseEvent):void{
+				if(imageHitArea==null){
+					createHitArea();
+				}
+			}
+
+			public function onFocusHitArea(event:MouseEvent):void{
+				for (var i:uint=0; i < imageHitArea.numChildren; i++){					
+					imageHitArea.removeChildAt(i);
+				}
+				imageSelectBox = new UIComponent();
+				imageSelectBox.graphics.lineStyle(5, 0xd65959, 0.5,false, "normal", JointStyle.MITER, null);
+				var image:Image_ = Image_(data);
+				imageSelectBox.graphics.drawRect(6.5,4,image.getWidth() + 2, image.getHeight() + 2);//aq: the rec seems to be created as an "outset"*/
+				imageHitArea.addChildAt(imageSelectBox, 0);
+				var f:DropShadowFilter = new DropShadowFilter(5,90,0,.4);
+				var myFilters:Array = new Array();
+				myFilters.push(f);
+				AlbumImg.filters=myFilters;
+			}
+			
+			public function onDeFocusHitArea(event:MouseEvent):void{
+				AlbumImg.filters=null;
+				for (var i:uint=0; i < imageHitArea.numChildren; i++){					
+					imageHitArea.removeChildAt(i);
+				}
+				imageSelectBox=null;
+			}
+			
+			public function onSelectHitArea(event:MouseEvent):void{
+				var image:Image_ = Image_(data);
+				FlexGlobals.topLevelApplication.onClickPhoto(image.getPhotoObj());
+			}
+			
+			
+			public function onInit():void{
+				focusEnabled=true;
+				addEventListener(MouseEvent.ROLL_OVER, onFocus);
+				addEventListener(MouseEvent.MOUSE_DOWN, onSelect);
+			}
+		]]>		
+	</mx:Script>
+	
+</mx:Canvas>

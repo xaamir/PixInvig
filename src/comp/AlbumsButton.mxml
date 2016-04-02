@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Button initialize="onInit()" mouseOver="onMouseOver()" mouseOut="onMouseOut()" 
+					xmlns:mx="http://www.adobe.com/2006/mxml" xmlns:comp="comp.*">
+	<mx:Script>
+		<![CDATA[
+			import actionObj.Consts;
+			
+			import mx.core.Application;
+			import mx.core.FlexGlobals;
+			[Embed("assets/skin/album_29x30.png")]
+			private const up_skin:Class;
+			
+			//[Embed("assets/skin/album.png")]
+			//private const up_disabled_skin:Class;
+						
+			private function onMouseOut():void{
+				super.filters=null;
+			}
+						
+			private function onMouseOver():void{
+				var f:DropShadowFilter = new DropShadowFilter(2,90,0,.4);
+				var myFilters:Array = new Array();
+				myFilters.push(f);
+				super.filters=myFilters;				
+			}
+			
+			private function onInit():void{
+				super.setStyle("skin", up_skin);
+				super.setStyle("upSkin", up_skin);
+				super.setStyle("overSkin", up_skin);
+				super.setStyle("downSkin", up_skin);
+				super.setStyle("disabledSkin", up_skin);
+			}
+			
+		]]>		
+	</mx:Script>
+</mx:Button>

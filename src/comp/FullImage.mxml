@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Image xmlns:mx="http://www.adobe.com/2006/mxml"
+		  width="650" height="438" focusEnabled="true" horizontalAlign="center" verticalAlign="middle"  
+		  scaleContent="false" initialize="onInit()">
+	<mx:Script>
+		<![CDATA[			
+			public function onInit():void{
+				var f:GlowFilter = new GlowFilter(0,0.4,32,32,2.5,3,false, false);
+				var myFilters:Array = new Array();
+				myFilters.push(f);
+				filters=myFilters;
+			}
+		]]>		
+	</mx:Script>
+</mx:Image>

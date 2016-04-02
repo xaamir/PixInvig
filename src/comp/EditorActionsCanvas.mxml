@@ -1,0 +1,293 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:mx="http://www.adobe.com/2006/mxml"
+		   xmlns:comp="comp.*"
+		   width="760" height="137" backgroundAlpha="1"
+		   backgroundImage="@Embed('assets/skin/editor_menu.jpg')" borderColor="#000000"
+		   borderStyle="none" borderThickness="0" horizontalScrollPolicy="off"
+		   verticalScrollPolicy="off">
+	<mx:states>
+		<mx:State name="Compare">
+			<mx:RemoveChild target="{CompareBtn}"/>
+			<mx:AddChild position="lastChild" relativeTo="{editormenucanvas1}">
+				<comp:OriginalButton x="15" y="9" buttonMode="true" click="onOriginal()"
+									 enabled="true" fontSize="12" useHandCursor="true"/>
+			</mx:AddChild>
+		</mx:State>
+		<mx:State name="Effects">
+			<mx:RemoveChild target="{CompareBtn}"/>
+		</mx:State>
+		<mx:State name="Original">
+			<mx:SetProperty name="width" target="{scroller}" value="646"/>
+			<mx:SetProperty name="horizontalCenter" target="{scroller}" value="-2"/>
+		</mx:State>
+	</mx:states>
+	<comp:ImageHScroller id="scroller" width="642" height="100" direction="left" horizontalCenter="0"
+						 initialize="onInit()" itemRenderer="comp.ActionImageCanvas"
+						 verticalCenter="26"/>	
+	<comp:EditorMenuCanvas id="editormenucanvas1" x="0" y="-1">
+		<comp:CompareButton id="CompareBtn" x="15" y="9" buttonMode="true" click="onCompare()"
+							enabled="false" fontSize="12" useHandCursor="true"/>
+		<comp:PublishButton id="PublishBtn" x="649" y="9" buttonMode="true" click="onPublish()"
+							enabled="false" useHandCursor="true"/>
+		<mx:LinkButton id="FiltersLink" x="261" y="7" width="86" label="Filters" buttonMode="true"
+					   click="onFilters()" color="#FFFFFF" fontFamily="Arial" fontSize="17"
+					   fontWeight="bold" initialize="onInitFilterLink()" rollOverColor="#D65959"
+					   selectionColor="#903c3c" useHandCursor="true"/>
+		<mx:LinkButton id="EffectsLink" x="346" y="7" width="86" label="Effects" buttonMode="true"
+					   click="onEffects()" color="#FFFFFF" fontFamily="Arial" fontSize="17"
+					   fontWeight="bold" rollOverColor="#D65959" selectionColor="#903c3c"
+					   useHandCursor="true"/>
+		<comp:PointerButton id="Pointer" x="256" y="31" width="80" height="10"/>
+		<comp:CropButton id="CropBtn" x="122" y="10" buttonMode="true" click="onCrop()"
+						 useHandCursor="true"/>
+	</comp:EditorMenuCanvas>
+	<comp:RightButton id="FwdBtn" x="710" y="63" width="36" height="48" buttonMode="true"
+					  click="onFwd()" useHandCursor="true"/>
+	<comp:LeftButton id="BackBtn" x="6" y="63" width="36" height="48" buttonMode="true"
+					 click="onBack()" useHandCursor="true"/>
+	
+	<mx:Script>
+		<![CDATA[
+			import ActionList.EffectsList;
+			import ActionList.FilterList;
+			import ActionList.IActionList;
+			
+			import actionObj.Consts;
+			import actionObj.event.ClickCrop;
+			import actionObj.event.ClickEffects;
+			import actionObj.event.ClickFilters;
+			import actionObj.event.CompareImageEvent;
+			import actionObj.image.Image_;
+			import actionObj.image.Photo;
+			
+			import cmodule.aircall.CLibInit;
+			
+			import mx.core.FlexGlobals;
+			import mx.managers.PopUpManager;
+			
+			public const WIDTHOFPOINTER:int =80;
+			private var photo:Photo;
+			public var controlList:IActionList;
+			public var actionsList:Array=null;
+			public var tBefMillisec:Number;
+			private var jpgStream:ByteArray;			
+			private var jpeglib:Object;
+			private var jpeginit:CLibInit = new CLibInit(); // get library 
+			public var tAfterMillisec:Number;
+			private var comments:String=null;
+			private var story:String = null;
+			
+			public function onInitFilterLink():void{
+				FiltersLink.setStyle("useRollOver", false);				
+			}
+			
+			public function setPhoto(_photo:Photo):void{
+				photo=_photo;
+				PublishBtn.enableFlag(_photo.enablePublishButton());
+				controlList=new FilterList(scroller, photo);
+			}
+						
+			public function onInit():void{
+			}
+			
+			public function initCompareButton():void{
+				if(currentState=="Original"){
+					CompareBtn.enableFlag(false);
+				}
+			}
+			
+			public function enableCompareButton():void{
+				if(currentState=="Original"){
+					CompareBtn.enableFlag(true);
+				}				
+			}
+			
+			public function onPublish():void{
+				if(!FlexGlobals.topLevelApplication.hasPublishPermission()){
+					FlexGlobals.topLevelApplication.getPermissions();
+					return;
+				}
+				var publishTW:PublishAndTagTW = new PublishAndTagTW();
+				PopUpManager.addPopUp(publishTW, this, true);
+				publishTW.setPhoto(photo);
+				publishTW.setCanvas(this);
+				if(photo.getFullSizedImage().isCropped() && !photo.getFullSizedImage().isEffected() && !photo.getFullSizedImage().isFiltered()){
+					publishTW.setCurrentState("Crop");
+					publishTW.setStory("Crop");				}
+				else if(!photo.getFullSizedImage().isCropped() && photo.getFullSizedImage().isEffected() && !photo.getFullSizedImage().isFiltered()){
+					if (photo.getFullSizedImage().getEffect().getLabel()=="Focus"){
+						publishTW.currentState="Focus";
+						publishTW.setStory("Focus");
+					}
+					else if (photo.getFullSizedImage().getEffect().getLabel()=="Desaturate"){
+						publishTW.currentState="Desat";
+						publishTW.setStory("Desaturate");
+					}
+					else {
+						publishTW.setStory("Share");						
+					}
+				}
+				else if(!photo.getFullSizedImage().isCropped() && !photo.getFullSizedImage().isEffected() && photo.getFullSizedImage().isFiltered()){
+					publishTW.currentState="Filter";
+					publishTW.setStory("Filter");
+				}
+				else {
+					publishTW.setStory("Share");					
+				}
+			}
+			
+			public function publishPic(_tagIds:Array, _comments:String, _story:String = null):void{
+				comments=_comments;
+				story=_story;
+				if(comments==null){
+					comments="";
+				}
+				if(comments==""){
+					var clickArr:Array = new Array();
+					clickArr["type"]=Consts.CLICK_PUBLISH;
+					FlexGlobals.topLevelApplication.recordClickData(clickArr);					
+				}
+				else{
+					var multiClickArr:Array = new Array();
+					if(comments!=""){
+						multiClickArr.push(Consts.CLICK_COMMENT);
+					}
+					multiClickArr.push(Consts.CLICK_PUBLISH);
+					FlexGlobals.topLevelApplication.recordMultipleClickData(multiClickArr);					
+				}
+				FlexGlobals.topLevelApplication.addUploadingTW();
+				PublishBtn.enableFlag(false);
+				
+				var img:Image_ =  photo.getFullSizedImage();
+				img.setPublished();
+				var tBef:Date = new Date();
+				tBefMillisec = tBef.getTime();
+				
+				if (!jpeglib) {
+					jpeglib=jpeginit.init();
+				}
+				var publishBM:Bitmap = img.returnPublishImage();
+				var imgData:ByteArray = publishBM.bitmapData.getPixels(publishBM.bitmapData.rect); 
+				if(publishBM.width <=480 || publishBM.height <=480){
+					story=null; //to publish the story, the pic should be at least 480 in width and height
+				}
+				imgData.position = 0; 
+				jpgStream = new ByteArray(); 				
+				jpeglib.encodeAsync(encodeComplete, imgData, jpgStream, publishBM.bitmapData.width, publishBM.bitmapData.height, 80);
+				
+			}
+			
+			private function encodeComplete(e:Event):void {
+				var tAfter:Date = new Date();
+				tAfterMillisec = tAfter.getTime();
+				var uploadURL:URLRequest = new URLRequest();
+				try{
+					/*if (FlexGlobals.topLevelApplication.didPermissionsToggle()){
+						uploadURL.url = FlexGlobals.topLevelApplication.m_url + "submitPicFB.php?fb_id=" + FlexGlobals.topLevelApplication.m_fbId + "&feed=Y";						
+					}*/
+					uploadURL.url = FlexGlobals.topLevelApplication.m_url + "submitPicFB.php?fb_id=" 
+						+ FlexGlobals.topLevelApplication.getUserFbId() + "&comments=" + comments + 
+						"&image_dir=" + FlexGlobals.topLevelApplication.getDir() + "&action_type=" + 
+						FlexGlobals.topLevelApplication.getObjectType();
+					if (!FlexGlobals.topLevelApplication.isFeedPosted() && FlexGlobals.topLevelApplication.getCountPics() > 2){
+						uploadURL.url += "&feed=Y";		
+						FlexGlobals.topLevelApplication.setFeedPosted(true);
+					}
+					else{
+						uploadURL.url += "&feed=N";		
+					}
+
+					if(story!=null){
+						uploadURL.url += "&story=" + story;						
+					}
+					uploadURL.contentType = 'application/octet-stream';
+					uploadURL.method = URLRequestMethod.POST;
+					uploadURL.data = jpgStream;
+					var urlLoader:URLLoader = new URLLoader();
+					urlLoader.addEventListener(Event.COMPLETE, completeHandler);
+					urlLoader.load(uploadURL);
+				}
+				catch (error:Error){
+					trace(error.toString());
+				}
+			} 			
+						
+			public function completeHandler(event:Event):void{
+				var tReached:Date = new Date();
+				var tReachedTime:Number=tReached.getTime();
+				FlexGlobals.topLevelApplication.uploadingComplete();				
+			}
+			
+			public function onCrop():void{
+				dispatchEvent(new ClickCrop("ClickCrop"));				
+			}
+							
+			public function onEffects():void{
+				currentState="Effects";
+				dispatchEvent(new ClickEffects("ClickEffects"));
+				controlList=new EffectsList(scroller, photo);
+				prepareActionList();
+				setListData();
+				PublishBtn.enableFlag(photo.enablePublishButton());
+				setScrollButtons(false);
+			}
+			
+			public function onFilters():void{
+				if(photo.getFullSizedImage().getMode()==Image_.COMPARE_MODE){
+					currentState="Compare";					
+				}
+				else{
+					currentState="Original";										
+				}
+				dispatchEvent(new ClickFilters("ClickFilters"));
+				controlList=new FilterList(scroller, photo);
+				prepareActionList();
+				setListData();
+				PublishBtn.enableFlag(photo.enablePublishButton());
+				setScrollButtons(true);
+			}
+			
+			public function onCompare():void{
+				currentState="Compare";
+				var compareEvent:CompareImageEvent = new CompareImageEvent("CompareImageEvent",photo);
+				dispatchEvent(compareEvent);
+			}
+			
+			public function onOriginal():void{
+				currentState="Original";
+				var compareEvent:CompareImageEvent = new CompareImageEvent("CompareImageEvent",photo);
+				dispatchEvent(compareEvent);
+			}
+
+			public function onBack():void{
+				setScrollButtons(false);
+				addEventListener("ScrollCompleteEvent", scrollCompleteCallBack);				
+				scroller.onBack();
+			}
+			
+			public function onFwd():void{
+				setScrollButtons(false);
+				addEventListener("ScrollCompleteEvent", scrollCompleteCallBack);		
+				scroller.onFwd();
+			}
+			
+			private function setScrollButtons(flag:Boolean):void{
+				FwdBtn.enabled=flag;
+				BackBtn.enabled=flag;				
+			}
+			
+			public function scrollCompleteCallBack(event:Event):void{
+				removeEventListener("ScrollCompleteEvent", scrollCompleteCallBack);
+				setScrollButtons(true);
+			}
+						
+			public function prepareActionList():void{
+				controlList.prepareActionsList();
+			}
+						
+			public function setListData():void{
+				controlList.setListData();
+			}
+		]]>			
+	</mx:Script>
+</mx:Canvas>

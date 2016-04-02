@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:TitleWindow xmlns:mx="http://www.adobe.com/2006/mxml"
+				xmlns:comp="comp.*"
+				width="124" height="162" backgroundAlpha="0.8" backgroundColor="#320909"
+				borderColor="#050000" borderStyle="solid" borderThickness="0"
+				borderThicknessBottom="0" borderThicknessTop="10" color="#FCFEFE" cornerRadius="0"
+				creationComplete="onInit()" fontFamily="Arial" fontSize="15"
+				headerColors="0, 0xffffff" headerHeight="20" horizontalAlign="center"
+				horizontalScrollPolicy="off" layout="absolute" move="onMove(event)"
+				textAlign="center" title="Crop Actions" verticalAlign="middle"
+				verticalScrollPolicy="off">	
+	
+	<comp:ApplyButton x="2" y="9" useHandCursor="true" buttonMode="true"  id="ApplyCrop" click="onApply()"/>
+	<comp:ResetCropButton x="2" y="49" useHandCursor="true" buttonMode="true" id="ResetCrop" click="onReset()" />
+	<comp:CancelButton x="2" y="89" useHandCursor="true" buttonMode="true" id="CancelCrop" click="onCancel()"/>
+	<mx:Script>	
+		<![CDATA[
+			import comp.EditorCanvas;
+			
+			import mx.core.FlexGlobals;
+			private var editor:comp.EditorCanvas = null;
+
+			public function onInit():void{
+			}
+						
+			public function onMove(event:Event):void{//keeps TW inside layout
+				var appW:Number=FlexGlobals.topLevelApplication.width;
+				var appH:Number=FlexGlobals.topLevelApplication.height;
+				if(this.x+this.width>appW)
+				{
+					this.x=appW-this.width;
+				}
+				if(this.x<0)
+				{
+					this.x=0;
+				}
+				if(this.y+this.height>appH)
+				{
+					this.y=appH-this.height;
+				}
+				if(this.y<0)
+				{
+					this.y=0;
+				}
+			}
+			
+			public function  onApply():void{
+				editor.onClickCropApply();
+			}
+			
+			public function  onReset():void{
+				editor.onClickCropReset();
+			}
+
+			public function  onCancel():void{
+				editor.onClickCropCancel();
+			}
+			
+			public function setParent(parent:EditorCanvas):void{
+				editor = parent;				
+			}
+		]]>		
+	</mx:Script>	
+</mx:TitleWindow>

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Button initialize="onInit()" xmlns:mx="http://www.adobe.com/2006/mxml">
+	<mx:Script>
+		<![CDATA[
+			[Embed("assets/skin/up.png")]
+			private const up_skin:Class;
+
+			[Embed("assets/skin/up_disabled.png")]
+			private const up_disabled_skin:Class;
+			
+			private function onInit():void{
+				setStyle("skin", up_skin);
+				setStyle("upSkin", up_skin);
+				setStyle("overSkin", up_skin);
+				setStyle("downSkin", up_skin);
+				setStyle("disabledSkin", up_skin);
+				//setStyle("icon", buttonIcon);				
+			}
+						
+			public function setEnabled(flag:Boolean):void{
+				enabled=flag;
+				if(enabled){
+					useHandCursor=true;
+				}
+				else{
+					useHandCursor=false;
+				}
+			}
+			
+		]]>		
+	</mx:Script>
+</mx:Button>

@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:mx="http://www.adobe.com/2006/mxml"
+		   xmlns:comp="comp.*" click="onClickImage(event)" initialize="onInit()"
+		   width="86" height="85" horizontalScrollPolicy="off" verticalScrollPolicy="off" >
+	<mx:Image x="4" y="0" id="selectionImg" visible="false" source="@Embed('assets/skin/selected_filter.png')"/>
+	<comp:ActionImage id="actionImg" source="{data.img.source}" x="9" y="1" useHandCursor="true" buttonMode="true" creationComplete="onCreate()"/>
+	<mx:Label id="ActionLabel" x="13" y="64" width="60" color="#FFFFFF" fontFamily="Arial" fontSize="11"
+			  text="{data.getLabel()}" textAlign="center"/>
+	<mx:Script>
+		<![CDATA[
+			import actionObj.Consts;
+			import actionObj.actions.IAction;
+			import actionObj.event.EditListEvent;
+			import actionObj.image.ActionImageData;
+			import actionObj.image.Image_;
+			import actionObj.image.Photo;
+			
+			import flash.trace.Trace;
+			
+			import mx.containers.HBox;
+			import mx.controls.Image;
+			import mx.core.Application;
+			import mx.core.UIComponent;
+			
+			public function onInit():void{
+				setStyle("useRollOver", false);
+				var f:DropShadowFilter = new DropShadowFilter(2,90,0,.7,4,4,1,1,false);
+				var myFilters:Array = new Array();
+				myFilters.push(f);
+				ActionLabel.filters=myFilters;
+				var actionData:ActionImageData = ActionImageData(data);
+				if(actionData.isSelected){
+					selectionImg.visible=true;
+				}
+			}
+			
+			public function onSelect():void{
+				selectionImg.visible=true;
+			}
+			
+			public function onDeselect():void{
+				selectionImg.visible=false;
+			}
+			
+			public function onClickImage(e:Event):void{
+				var imgScroller:HBox = HBox(this.parent);
+				var curr:ActionImageCanvas = null;
+				for(var j:int = 0; j < imgScroller.getChildren().length ;j++)
+				{
+					curr = imgScroller.getChildAt(j) as ActionImageCanvas;
+					curr.onDeselect();	
+				}				
+				onSelect();
+				var filter:IAction= IAction(data.filter);
+				var photo:Photo = Photo(data.photo);
+				var editListEvent:EditListEvent = new EditListEvent("EditListEvent",filter, photo);
+				dispatchEvent(editListEvent);
+			}
+			
+			public function onCreate():void{
+				var filter:IAction= IAction(data.filter);
+			}			
+		]]>			
+	</mx:Script>
+</mx:Canvas>

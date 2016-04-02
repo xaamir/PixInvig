@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Button initialize="onInit()" mouseOver="onMouseOver()" mouseOut="onMouseOut()" xmlns:mx="http://www.adobe.com/2006/mxml">
+	<mx:Script>
+		<![CDATA[
+			[Embed("assets/skin/go_album.png")]
+			private const up_skin:Class;
+			
+			private function onMouseOut():void{
+				filters=null;
+			}
+			
+			private function onMouseOver():void{
+				var f:DropShadowFilter = new DropShadowFilter(2,90,0,.4);
+				var myFilters:Array = new Array();
+				myFilters.push(f);
+				filters=myFilters;				
+			}
+			
+			private function onInit():void{
+				setStyle("skin", up_skin);
+				setStyle("upSkin", up_skin);
+				setStyle("overSkin", up_skin);
+				setStyle("downSkin", up_skin);
+				setStyle("disabledSkin", up_skin);
+			}
+		]]>		
+	</mx:Script>
+</mx:Button>

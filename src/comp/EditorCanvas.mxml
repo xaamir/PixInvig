@@ -1,0 +1,720 @@
+<mx:Canvas xmlns:mx="http://www.adobe.com/2006/mxml"
+		   xmlns:comp="comp.*"
+		   width="760" height="600" currentState="EditorCanvasFilters" horizontalScrollPolicy="off"
+		   initialize="onInit()" verticalScrollPolicy="off">
+	<mx:states>
+		<mx:State name="EditorCanvasEffects">
+			<mx:AddChild position="lastChild" relativeTo="{this}">
+				<comp:EffectControl id="effectControl" x="621" y="322" visible="false" >
+				</comp:EffectControl>
+			</mx:AddChild>
+		</mx:State>
+		<mx:State name="Crop">
+		</mx:State>
+		<mx:State name="EditorCanvasFilters">
+		</mx:State>
+	</mx:states>
+	<comp:AlbumButton toolTip="Back to Album" id="AlbumBack"  click="onAlbumBack()"  x="10" y="11" width="29" height="30" buttonMode="true" useHandCursor="true"/>
+	<comp:FullImage id="HideImage" x="35" y="48" horizontalAlign="center" verticalAlign="middle"/> 
+	<comp:FullImage id="ShowImage" x="55" y="10" mouseDown="onMouseDown(event)" mouseUp="onMouseUp(event)" mouseMove="onMouseMove(event)" mouseOut="onMouseOut(event)" width="650" height="438" horizontalAlign="center" verticalAlign="middle"/> 
+	<comp:LeftButton id="prevPhotoButton" alpha="0.45" x="37" y="239" visible="false" click="onPrev()" mouseOver="onButtonMouseOver(event)"/>
+	<comp:RightButton id="nextPhotoButton" alpha="0.45" x="37" y="239" visible="false" click="onNext()" mouseOver="onButtonMouseOver(event)"/>
+	<mx:Label id="LabelBegPage" x="10" y="445" color="#FFFFFF" fontFamily="Arial"
+			  fontSize="12" text="12" textAlign="center"/>
+	<mx:Label id="label1" x="23" y="445" color="#FFFFFF" fontFamily="Arial"
+			  fontSize="12" text="/" textAlign="center"/>
+	<mx:Label id="LabelEndPage" x="30" y="445" color="#FFFFFF" fontFamily="Arial"
+			  fontSize="12" text="45" textAlign="center"/>		
+	<comp:EditorActionsCanvas id="actionsCanvas" x="0" y="463">
+	</comp:EditorActionsCanvas>		
+	<mx:Script>	
+		<![CDATA[
+			import actionObj.Consts;
+			import actionObj.actions.IAction;
+			import actionObj.actions.IInteraction;
+			import actionObj.actions.IInteractiveAction;
+			import actionObj.actions.effects.EffectBase;
+			import actionObj.actions.effects.FocusEffect;
+			import actionObj.actions.filters.CropEffect;
+			import actionObj.event.ClickCrop;
+			import actionObj.event.ClickEffects;
+			import actionObj.event.ClickFilters;
+			import actionObj.event.CompareImageEvent;
+			import actionObj.event.EditListEvent;
+			import actionObj.event.EffectControlEvent;
+			import actionObj.image.Album;
+			import actionObj.image.ImageLoadTimer;
+			import actionObj.image.Image_;
+			import actionObj.image.Photo;
+			import actionObj.image.PhotoCollection;
+			import actionObj.transition.BlurEffect;
+			import actionObj.transition.SlideEffect;
+			
+			import flash.trace.Trace;
+			import flash.utils.getTimer;
+			
+			import mx.controls.Image;
+			import mx.controls.sliderClasses.Slider;
+			import mx.core.Application;
+			import mx.core.BitmapAsset;
+			import mx.core.FlexGlobals;
+			import mx.effects.Dissolve;
+			import mx.effects.Move;
+			import mx.effects.WipeLeft;
+			import mx.effects.WipeRight;
+			import mx.events.SliderEvent;
+			import mx.managers.PopUpManager;
+			
+			import spark.effects.Fade;
+			
+			public var photo:Photo;
+			public var prevPhoto:Photo = null;
+			public var nextPhoto:Photo = null;
+			public var prevImageLoadTimer:ImageLoadTimer = null;
+			public var nextImageLoadTimer:ImageLoadTimer = null;
+			public var setPhotoTimer:Timer = null;
+			
+			
+			private const POINTER_POS_FILTER:int=0;
+			private const POINTER_POS_EFFECT:int=1;
+			private const POINTER_POS_CONTROL:int=2;
+			private const POINTER_POS_CAPTION:int=3;
+			private const CANVAS_STATE_NEW:int=0;//when the canvas is loaded by clicking a photo from the album canvas
+			private const CANVAS_STATE_PREV_BUTTON:int=1;//when the canvas is loaded by clicking prev
+			private const CANVAS_STATE_NEXT_BUTTON:int=2;//when the canvas is loaded by clicking next
+			private const ALBUM_BUTTON_HEIGHT:int=18;
+			private var filter:IAction=null;
+			private var mouseDown:Boolean = false;
+			private var focusMouseSaveX:int;
+			private var pointerPos:int=POINTER_POS_FILTER;
+			private var moveRecorded:Boolean=false;
+			private var resizeEventsRecorded:int=0;
+			private var canvasState:int=CANVAS_STATE_NEW;
+			private var crop:CropEffect;
+			private var cropControl:CropControl = null;
+			
+			public function onClickCrop(event:ClickCrop):void{
+				currentState="Crop";
+				var clickArr:Array = new Array();
+				clickArr["type"]=Consts.CLICK_CROP_POP;				
+				FlexGlobals.topLevelApplication.recordClickData(clickArr);
+				if(cropControl==null){
+					cropControl = new CropControl();
+					cropControl.x=620;
+					cropControl.y=300;
+					cropControl.setParent(this);
+					actionsCanvas.CropBtn.enableFlag(false);
+				}
+				PopUpManager.addPopUp(cropControl, this, false);
+				crop = new CropEffect(photo);
+				ShowImage.source=photo.getFullSizedImage().returnFramedImage(new Bitmap(crop.getCropBitmapData()));					
+			}			
+			
+			public function onClickCropApply():void{
+				var clickArr:Array = new Array();
+				clickArr["type"]=Consts.CLICK_CROP_APPLY;				
+				FlexGlobals.topLevelApplication.recordClickData(clickArr);									
+				crop.applyComplete();
+				photo.getAlbumImage().createAlbumImageFromFullImage(photo.getFullSizedImage());
+				resetCropControls();
+				actionsCanvas.PublishBtn.enableFlag(photo.enablePublishButton());
+			}
+			
+			public function onClickCropCancel():void{
+				photo.getFullSizedImage().resetCrop();
+				resetCropControls();
+			}
+
+			private function resetCropControls():void{
+				if(pointerPos==POINTER_POS_EFFECT){
+					currentState="EditorCanvasEffects";					
+				}
+				else{
+					currentState="EditorCanvasFilters";						
+				}
+				if(cropControl!=null){
+					PopUpManager.removePopUp(cropControl);
+					cropControl=null;
+					actionsCanvas.CropBtn.enableFlag(true);
+				}
+				ShowImage.source=photo.getFullSizedImage().returnFramedImage(photo.getFullSizedImage().returnEditImage(Consts.EDIT_EFFECT + Consts.EDIT_FILTER));
+				setPosition(photo.getFullSizedImage());				
+			}
+			
+			public function onClickCropReset():void{
+				crop.cropReset();
+				ShowImage.source=photo.getFullSizedImage().returnFramedImage(new Bitmap(crop.getCropBitmapData()));
+			}			
+			
+			public function onSlideEffect(eventEffect:EffectControlEvent):void{
+				if((filter!=null) && (pointerPos==POINTER_POS_EFFECT)){
+					var ct:Slider=Slider(eventEffect._sliderEvent.target);
+					var action:IInteractiveAction;
+					var fullImg:Image_=photo.getFullSizedImage();
+					action=IInteractiveAction(filter);
+					action.setMaskScaleFactorFromRatio(ct.value);						
+					action.setImageObj(fullImg);
+					var filteredBmd:BitmapData=filter.getBitmapData(fullImg);//this sets the filtered bmd into the Image_ object
+					filteredBmd = (fullImg.returnEditImage(Consts.EDIT_EFFECT + Consts.EDIT_FILTER)).bitmapData;					
+					ShowImage.source=fullImg.returnFramedImage(new Bitmap(filteredBmd));
+					if(resizeEventsRecorded==1){
+						var clickArr:Array = new Array();					
+						clickArr["type"]=Consts.CLICK_IMAGE_RESIZE;				
+						FlexGlobals.topLevelApplication.recordClickData(clickArr);
+					}
+					resizeEventsRecorded++;
+				}
+			}
+
+			public function onMouseDown(event:MouseEvent):void{
+				if(currentState=="Crop"){
+					mouseDown = true;
+					crop.onMouseDown(event);
+					ShowImage.source=photo.getFullSizedImage().returnFramedImage(new Bitmap(crop.getCropBitmapData()));					
+				}
+				else{
+					if((filter!=null) && (pointerPos==POINTER_POS_EFFECT)){
+						var mouseX:int;
+						var mouseY:int;
+						var graphX:int;
+						var graphY:int;
+						var tn1ImgHt:int  = filter.getBitmapData().height;
+						// mouseX and mouseY vary from 1..256
+						mouseX = event.localX;
+						mouseY = (tn1ImgHt - event.localY ); // convert to graph coordinates where Y=0 is at bottom
+						mouseDown = true;
+						// graphX and graphY vary from 0..255. We subtract 1 to use as index into array.
+						graphX = mouseX - 1;
+						graphY = mouseY - 1;
+						focusMouseSaveX = graphX;
+	
+						var focusPreview_XPercent:Number = ( 100.0 * Number(graphX) ) / Number(filter.getBitmapData().rect.width);  // scale graphX down from 0..width  to 0..100
+						var focusPreview_YPercent:Number = ( 100.0 * Number(graphY) ) / Number(filter.getBitmapData().rect.height); // scale graphY down from 0..height to 0..100
+						var focus:IInteractiveAction;
+						focus=IInteractiveAction(filter);
+						focus.setFocalPoint( focusPreview_XPercent, focusPreview_YPercent );					
+						focus.setDarkenFlag(true);
+						var fullImg:Image_=photo.getFullSizedImage();
+						filter.setImageObj(fullImg);			
+						var filteredBmd:BitmapData=filter.getBitmapData(fullImg);//this sets the filtered bmd into the Image_ object
+						filteredBmd = (fullImg.returnEditImage(Consts.EDIT_EFFECT + Consts.EDIT_FILTER)).bitmapData;						
+						ShowImage.source=fullImg.returnFramedImage(new Bitmap(filteredBmd));
+					}
+				}
+			}
+			
+			public function onMouseUp(event:MouseEvent):void{
+				if(currentState=="Crop"){
+					//do nothing?
+				}
+				else{
+					if((filter!=null) && (pointerPos==POINTER_POS_EFFECT) && mouseDown==true){
+						var focus:IInteractiveAction;
+						focus=IInteractiveAction(filter);
+						focus.setDarkenFlag(false);
+						var fullImg:Image_=photo.getFullSizedImage();
+						filter.setImageObj(fullImg);			
+						var filteredBmd:BitmapData=filter.getBitmapData(fullImg);//this sets the filtered bmd into the Image_ object
+						filteredBmd = (fullImg.returnEditImage(Consts.EDIT_EFFECT + Consts.EDIT_FILTER)).bitmapData;						
+						ShowImage.source=fullImg.returnFramedImage(new Bitmap(filteredBmd));
+						if(moveRecorded==false){
+							var clickArr:Array = new Array();
+							clickArr["type"]=Consts.CLICK_IMAGE_MOVE;				
+							clickArr["action"]=filter.getLabel();
+							FlexGlobals.topLevelApplication.recordClickData(clickArr);
+							moveRecorded=true;
+						}
+					}
+				}
+				mouseDown=false;
+				mouseDown = false;
+			}
+
+			public function onMouseMove(event:MouseEvent):void{
+				prevPhotoButton.visible=prevPhotoButton.enabled;
+				nextPhotoButton.visible=nextPhotoButton.enabled;
+				if(currentState=="Crop"){
+					crop.onMouseMove(event, mouseDown);
+					ShowImage.source=photo.getFullSizedImage().returnFramedImage(new Bitmap(crop.getCropBitmapData()));					
+				}
+				else{
+					var mouseX:int;
+					var mouseY:int;
+					var graphX:int;
+					var graphY:int;					
+					var diffX:Number;
+					var distX:Number;
+					var tn1ImgHt:int;				
+					// mouseX and mouseY vary from 1..256
+					mouseX = event.localX;
+					if((filter!=null) && (pointerPos==POINTER_POS_EFFECT)){
+						var focusSaveMaskScaleFactor:Number = 1;
+						var focus_maskScaleFactor:Number=1;
+						tn1ImgHt  = filter.getBitmapData().height;				
+						// Only move the Focus Effect around in the thumbnail image
+						// if the mouse is still "down".
+						mouseY = (tn1ImgHt - event.localY ); // convert to graph coordinates where Y=0 is at bottom
+						// graphX and graphY vary from 0..255. We subtract 1 to use as index into array.
+						graphX = mouseX - 1;
+						graphY = mouseY - 1;
+						if( mouseDown == true )
+						{
+							var focusPreview_XPercent:Number = ( 100.0 * Number(graphX) ) / Number(filter.getBitmapData().rect.width);  // scale graphX down from 0..width  to 0..100
+							var focusPreview_YPercent:Number = ( 100.0 * Number(graphY) ) / Number(filter.getBitmapData().rect.height); // scale graphY down from 0..height to 0..100
+							var action:IInteractiveAction;
+							action=IInteractiveAction(filter);
+							focus_maskScaleFactor=action.getMaskScaleFactor();
+							action.setDarkenFlag(true);
+							// Only set/reset the focal point if the Control Key is NOT down,
+							// and the Shift Key is NOT down. If one of them is down, that means 
+							// the user is changing the size of the mask, not repositioning it.
+								// User is repositioning the mask, remember the new position.
+								// Focus Effect assumes that:
+								// XPercent: 0% is at left,   100% is at right.  (  0,0==bottom left,    0,100== top left )
+								// YPercent: 0% is at bottom, 100% is at top.    (100,0==bottom right, 100,100== top right)
+							action.setFocalPoint( focusPreview_XPercent, focusPreview_YPercent );
+							action.setMaskScaleFactor(focus_maskScaleFactor);						
+							var fullImg:Image_=photo.getFullSizedImage();
+							filter.setImageObj(fullImg);			
+							var filteredBmd:BitmapData=filter.getBitmapData(fullImg);//this sets the filtered bmd into the Image_ object
+							filteredBmd = (fullImg.returnEditImage(Consts.EDIT_EFFECT + Consts.EDIT_FILTER)).bitmapData;							
+							ShowImage.source=fullImg.returnFramedImage(new Bitmap(filteredBmd));
+						} // END OF ... if( mouseDown == true )
+					}
+				}
+			}
+			
+			public function onMouseOut(event:MouseEvent):void{
+				prevPhotoButton.visible=false;
+				nextPhotoButton.visible=false;
+				mouseDown=false;
+			}
+
+			/**
+			 * AQ: June 22 - removing all keyboard handlers
+			 **/
+			public function keyboardEventHandler( keyDown:Boolean, event:KeyboardEvent ):void
+			{
+				// See this Adobe webpage for a full list of AS3 Keyboard Constants:
+				// http://help.adobe.com/en_US/FlashPlatform/reference/actionscript/3/flash/events/KeyboardEvent.html#!flash/ui/Keyboard.html
+				// More info here:
+				// http://help.adobe.com/en_US/ActionScript/3.0_ProgrammingAS3/WS5b3ccc516d4fbf351e63e3d118a9b90204-7d01.html
+				// http://help.adobe.com/en_US/FlashPlatform/reference/actionscript/3/flash/events/KeyboardEvent.html
+				// Keyboard.CONTROL   == 17  (Ctrl key)
+				// Keyboard.ALTERNATE == 18  (Alt key)
+				// Keyboard.SHIFT     == 16  (Shift key)
+				// Keyboard.ENTER     == 13  (Enter key)
+				// Keyboard.ESCAPE    == 27  (ESC key)
+				// Keyboard.F1        == 112 (F1 key)
+				// Keyboard.F2        == 113 (F2 key)
+				// Keyboard.SPACE     == 32  (Spacebar key)
+				// etc.
+				
+				// Both keys can be down at the same time, but we'll assume they can't be,
+				// and just check for the Control key first, then the Shift key.
+				/*if( ( event.keyCode == Keyboard.CONTROL ) && ( keyDown == true ) )
+				{
+					ctrlKeyIsDown = true;
+					shiftKeyIsDown = false; // we're assuming that both keys can't be down.
+				}
+				else if( ( event.keyCode == Keyboard.CONTROL ) && ( keyDown == false ) ){
+						ctrlKeyIsDown = false;
+				}
+				else if( ( event.keyCode == Keyboard.SHIFT ) && ( keyDown == true ) )
+				{
+					shiftKeyIsDown = true;
+					ctrlKeyIsDown = false; // we're assuming that both keys can't be down.
+				}
+				else if( ( event.keyCode == Keyboard.SHIFT ) && ( keyDown == false ) ){
+					shiftKeyIsDown = false;
+				}
+				else if( ( event.keyCode == Keyboard.ESCAPE ) && ( keyDown == true ) ){
+					// The ESC key has been pressed so generate a Mouse click Event
+					// for the either the Focus Effect Reset button or the Depth
+					// Effect Reset button to cause a reset of the settings for the
+					// corresponding effect based on the current mouse's Y position.
+				}*/
+			}
+
+			
+			//dispatched from ActionImage Canvas, applies the filters and effects and then sets the image on the canvas
+			public function onClickImage(editListEvent:EditListEvent):void{
+				filter=editListEvent.filter;
+				var fullImg:Image_=photo.getFullSizedImage();
+				filter.setImageObj(fullImg); 
+				var filteredBmd:BitmapData=filter.getBitmapData(fullImg);//this sets the filtered bmd into the Image_ object
+				filteredBmd = (fullImg.returnEditImage(Consts.EDIT_EFFECT + Consts.EDIT_FILTER)).bitmapData;
+				if(fullImg.getMode()==Image_.COMPARE_MODE){
+					var compareBM:Bitmap=fullImg.returnCompareSource();			
+					ShowImage.source=fullImg.returnFramedImage(compareBM);
+				}
+				else{
+					ShowImage.source=fullImg.returnFramedImage(new Bitmap(filteredBmd));
+				}				
+				setPosition(fullImg);
+				if(fullImg.isFiltered()){
+					actionsCanvas.enableCompareButton();					
+				}
+				else{
+					actionsCanvas.currentState="Original";
+					actionsCanvas.CompareBtn.enableFlag(false);
+				}
+				actionsCanvas.PublishBtn.enableFlag(fullImg.getPhotoObj().enablePublishButton());
+				var clickArr:Array = new Array();
+				if(pointerPos==POINTER_POS_EFFECT){
+					resizeEventsRecorded=0;					
+					var focus:IInteractiveAction;
+					focus=IInteractiveAction(filter);
+					setSlider(focus);
+					clickArr["type"]=Consts.CLICK_APPLY_EFFECT;							
+				}
+				else{
+					clickArr["type"]=Consts.CLICK_APPLY_FILTER;									
+				}
+				clickArr["action"]=filter.getLabel();
+				FlexGlobals.topLevelApplication.recordClickData(clickArr);				
+			}
+
+			private function setSlider(focus:IInteractiveAction):void{
+				if(focus.getMaskScaleFactor()!=0){
+					effectControl.visible=true;
+					effectControl.EffectSlider.value=focus.getSliderValFromMaskScaleFactor();
+				}
+				else{
+					effectControl.visible=false;//this would happen for Normal filter
+				}				
+			}
+			
+			//dispatched from ActionImage Canvas
+			public function onCompareImage(compareEvent:CompareImageEvent):void{
+				var img:Image_ = compareEvent.photo.getFullSizedImage();
+				var clickArr:Array = new Array();
+				if(img.getMode()==Image_.ORIG_MODE){
+					var compareBM:Bitmap=img.returnCompareSource();			
+					ShowImage.source=img.returnFramedImage(compareBM);
+					img.setMode(Image_.COMPARE_MODE);
+					clickArr["type"]=Consts.CLICK_COMPARE;			
+				}
+				else{
+					var bm:Bitmap=img.returnEditImage(Consts.EDIT_FILTER + Consts.EDIT_EFFECT);
+					setPosition(img);
+					ShowImage.source=img.returnFramedImage(bm);
+					img.setMode(Image_.ORIG_MODE);
+					clickArr["type"]=Consts.CLICK_ORIG;			
+				}				
+				FlexGlobals.topLevelApplication.recordClickData(clickArr);				
+			}
+			
+			//dispatched from EditorActionsCanvas
+			public function onInit():void{
+				currentState="EditorCanvasFilters";				
+				if(cropControl!=null){
+					PopUpManager.removePopUp(cropControl);
+					cropControl=null;
+					actionsCanvas.CropBtn.enableFlag(true);
+				}
+				actionsCanvas.currentState="Original";
+				actionsCanvas.CompareBtn.enableFlag(false);
+				actionsCanvas.PublishBtn.enableFlag(false);
+				addEventListener("EditListEvent", onClickImage);
+				addEventListener("CompareImageEvent", onCompareImage);
+				addEventListener("ClickEffects", onClickEffects);
+				addEventListener("ClickFilters", onClickFilters);
+				addEventListener("ClickCrop", onClickCrop);
+				addEventListener("EditorSliderEvent", onSlideEffect);
+				pointerPos=POINTER_POS_FILTER;
+			}
+									
+			public function onClickEffects(event:ClickEffects):void{
+				currentState="EditorCanvasEffects";
+				if(cropControl!=null){
+					PopUpManager.removePopUp(cropControl);
+					cropControl=null;
+					actionsCanvas.CropBtn.enableFlag(true);
+				}
+				if(pointerPos!=POINTER_POS_EFFECT){
+					effectControl.visible=false;					
+				}
+				var animateEffect:Move = new Move(actionsCanvas.Pointer);
+				animateEffect.duration=500;
+				animateEffect.xFrom=actionsCanvas.Pointer.x;
+				animateEffect.xTo=actionsCanvas.EffectsLink.x + actionsCanvas.EffectsLink.width/2 - actionsCanvas.Pointer.width/2;
+				animateEffect.play();
+				pointerPos=POINTER_POS_EFFECT;
+				var effect:IInteractiveAction = photo.getFullSizedImage().getEffect();
+				if(effect!=null){
+					filter=effect;
+					setSlider(effect);
+				}
+				var clickArr:Array = new Array();
+				clickArr["type"]=Consts.CLICK_EFFECT;				
+				FlexGlobals.topLevelApplication.recordClickData(clickArr);				
+			}
+
+			public function onClickFilters(event:ClickFilters):void{
+				currentState="EditorCanvasFilters";
+				if(cropControl!=null){
+					PopUpManager.removePopUp(cropControl);
+					cropControl=null;
+					actionsCanvas.CropBtn.enableFlag(true);
+				}			
+				var animateEffect:Move = new Move(actionsCanvas.Pointer);
+				animateEffect.duration=500;
+				animateEffect.xFrom=actionsCanvas.Pointer.x;
+				animateEffect.xTo= actionsCanvas.FiltersLink.x + actionsCanvas.FiltersLink.width/2 - actionsCanvas.Pointer.width/2;
+				animateEffect.play();
+				pointerPos=POINTER_POS_FILTER;
+				var clickArr:Array = new Array();
+				clickArr["type"]=Consts.CLICK_FILTER;				
+				FlexGlobals.topLevelApplication.recordClickData(clickArr);				
+			}
+
+			/**
+			 * Places an image on the canvas
+			 **/
+			public function setPhoto(_photo:Photo):void{
+				if(canvasState==CANVAS_STATE_NEW){
+					nextPhotoButton.enabled=false;
+					prevPhotoButton.enabled=false;
+					HideImage.source=null;	
+					photo=null;
+				}
+				if(photo!=null){
+					HideImage.source=photo.getFullSizedImage().returnImageSource();
+					HideImage.x= width/2 - photo.getFullSizedImage().getScaledWidth()/2;
+					//HideImage.y= ((height - actionsCanvas.height) + (AlbumBack.y + ALBUM_BUTTON_HEIGHT))/2 - photo.getFullSizedImage().getScaledHeight()/2;					
+					HideImage.y= ((height - actionsCanvas.height) + (AlbumBack.y))/2 - photo.getFullSizedImage().getScaledHeight()/2;					
+				}
+				photo=_photo;
+				loadAdjacentPhotos();
+				currentState="EditorCanvasFilters";
+				pointerPos=POINTER_POS_FILTER;
+				resizeEventsRecorded=0;
+				moveRecorded=false;
+				actionsCanvas.currentState="Original";
+				actionsCanvas.PublishBtn.enableFlag(false);
+				actionsCanvas.CompareBtn.enableFlag(false);
+				var _fullImage:Image_=photo.getFullSizedImage();
+				_fullImage.initEdits();
+
+				if(canvasState==CANVAS_STATE_PREV_BUTTON){
+					var fadePrev:Fade = new Fade(HideImage);
+					fadePrev.alphaFrom=1;
+					fadePrev.alphaTo=0;
+					fadePrev.duration=2000;
+					fadePrev.play();												
+					var wipeRight:WipeRight  = new WipeRight(ShowImage);
+					wipeRight.duration=1500;
+					wipeRight.play();												
+				}
+				else  if(canvasState==CANVAS_STATE_NEXT_BUTTON){
+					var fadeNext:Fade = new Fade(HideImage);
+					fadeNext.alphaFrom=1;
+					fadeNext.alphaTo=0;
+					fadeNext.duration=2000;
+					fadeNext.play();												
+					var wipeLeft:WipeLeft = new WipeLeft(ShowImage);
+					wipeLeft.duration=1500;
+					wipeLeft.play();												
+				}
+				LabelBegPage.text=(_photo.getIndex() + 1).toString();
+				LabelEndPage.text=(_photo.getAlbum().getPhotoCollection().getCount()).toString();
+				ShowImage.source=_fullImage.returnImageSource();
+				setPosition(_fullImage);
+				actionsCanvas.setPhoto(photo);
+				actionsCanvas.Pointer.x= actionsCanvas.FiltersLink.x + actionsCanvas.FiltersLink.width/2 - actionsCanvas.WIDTHOFPOINTER/2;
+				if(canvasState==CANVAS_STATE_NEW){
+					var fadeEffect:Fade = new Fade(ShowImage);
+					fadeEffect.alphaFrom=0;
+					fadeEffect.alphaTo=1;
+					fadeEffect.duration=1500;
+					fadeEffect.play();
+				}
+				else  if(canvasState==CANVAS_STATE_NEXT_BUTTON){
+					var wipeLeftShow:WipeLeft = new WipeLeft(ShowImage);
+					wipeLeftShow.duration=1500;
+					wipeLeftShow.play();	
+				}
+				else  if(canvasState==CANVAS_STATE_PREV_BUTTON){
+					var wipeRightShow:WipeRight  = new WipeRight(ShowImage);
+					wipeRightShow.duration=1500;
+					wipeRightShow.play();												
+				}
+				filter=null;
+				setPhotoTimer = new Timer(1500, 1);
+				setPhotoTimer.start();
+				setPhotoTimer.addEventListener(TimerEvent.TIMER_COMPLETE, onSetPhotoComplete);
+			}
+			
+			private function onButtonMouseOver(e:Event):void{
+				prevPhotoButton.visible=prevPhotoButton.enabled;	
+				nextPhotoButton.visible=nextPhotoButton.enabled;	
+			}
+			
+			private function onSetPhotoComplete(e:Event):void{
+				prevPhotoButton.x = ShowImage.x - 6;
+				prevPhotoButton.y = ShowImage.height/2;
+				nextPhotoButton.x = ShowImage.x + (photo.getFullSizedImage().getScaledWidth() - 30);
+				nextPhotoButton.y = ShowImage.height/2;
+				setPhotoTimer.stop();
+				setPhotoTimer.removeEventListener(TimerEvent.TIMER_COMPLETE, onSetPhotoComplete);
+				setPhotoTimer = null;				
+			}
+			
+			private function loadAdjacentPhotos():void{
+				var album:Album =  photo.getAlbum();
+				var collection:PhotoCollection = album.getPhotoCollection();
+				if(canvasState!=CANVAS_STATE_NEXT_BUTTON){
+					if(photo.getIndex()==0){
+						prevPhoto=null;
+					}
+					else{
+						prevPhoto = collection.getPhoto(photo.getIndex() - 1);
+						prevPhoto.loadFullImage();
+						prevImageLoadTimer = new ImageLoadTimer(100, 0, prevPhoto);
+						prevImageLoadTimer.addEventListener(TimerEvent.TIMER, onPrevImageLoadTick);
+						prevImageLoadTimer.start();
+					}
+				}
+				if (canvasState!=CANVAS_STATE_PREV_BUTTON){
+					if(photo.getIndex() >= (collection.getCount() - 1)){
+						nextPhoto=null;
+					}
+					else{
+						nextPhoto = collection.getPhoto(photo.getIndex() + 1);
+						nextPhoto.loadFullImage();
+						nextImageLoadTimer = new ImageLoadTimer(100, 0, nextPhoto);
+						nextImageLoadTimer.addEventListener(TimerEvent.TIMER, onNextImageLoadTick);
+						nextImageLoadTimer.start();
+					}
+				}				
+			}
+		
+			private function onPrevImageLoadTick(e:TimerEvent):void{
+				var imageLoadTimer:ImageLoadTimer = ImageLoadTimer(e.target);
+				if(imageLoadTimer.photo.isFullPicLoaded()){
+					prevPhotoButton.enabled=true;
+					imageLoadTimer.stop();
+					imageLoadTimer.removeEventListener(TimerEvent.TIMER,onPrevImageLoadTick);
+					imageLoadTimer=null;
+				}
+			}
+						
+			private function onNextImageLoadTick(e:TimerEvent):void{
+				var imageLoadTimer:ImageLoadTimer = ImageLoadTimer(e.target);
+				if(imageLoadTimer.photo.isFullPicLoaded()){
+					nextPhotoButton.enabled=true;
+					imageLoadTimer.stop();
+					imageLoadTimer.removeEventListener(TimerEvent.TIMER, onNextImageLoadTick);
+					imageLoadTimer=null;
+				}
+			}
+
+			public function onNext(checkEdited:Boolean=true):void{
+				if(checkEdited &&  (photo.getFullSizedImage().isEdited() && !photo.getFullSizedImage().isPublished())){
+					var editContinue:EditContinueTW = new EditContinueTW();
+					PopUpManager.addPopUp(editContinue, this, true);
+					editContinue.currentState='Next';
+					editContinue.setPhoto(photo);
+					editContinue.setCanvas(this);
+				}
+				else{
+					prevPhotoButton.visible=false;
+					nextPhotoButton.visible=false;
+					var clickArr:Array = new Array();
+					clickArr["type"]=Consts.CLICK_PHOTO_NEXT;				
+					FlexGlobals.topLevelApplication.recordClickData(clickArr);
+					if(cropControl!=null){
+						PopUpManager.removePopUp(cropControl);
+						cropControl=null;
+						actionsCanvas.CropBtn.enableFlag(true);
+					}					
+					nextPhotoButton.enabled=false;
+					canvasState=CANVAS_STATE_NEXT_BUTTON;
+					if(prevPhoto){
+						prevPhoto.unloadFullImage();
+					}
+					prevPhoto=photo;
+					prevPhotoButton.enabled=true;
+					setPhoto(nextPhoto);
+				}
+			}
+			
+			public function onPrev(checkEdited:Boolean=true):void{
+				if(checkEdited &&  (photo.getFullSizedImage().isEdited() && !photo.getFullSizedImage().isPublished())){
+					var editContinue:EditContinueTW = new EditContinueTW();
+					PopUpManager.addPopUp(editContinue, this, true);
+					editContinue.currentState='Prev';
+					editContinue.setPhoto(photo);
+					editContinue.setCanvas(this);
+				}
+				else{
+					//aq: the line below does not help as the moment a user moves the mouse, these buttons will become visible
+					prevPhotoButton.visible=false;
+					nextPhotoButton.visible=false;
+					var clickArr:Array = new Array();
+					clickArr["type"]=Consts.CLICK_PHOTO_PREV;				
+					FlexGlobals.topLevelApplication.recordClickData(clickArr);														
+					if(cropControl!=null){
+						PopUpManager.removePopUp(cropControl);
+						cropControl=null;
+						actionsCanvas.CropBtn.enableFlag(true);
+					}					
+					prevPhotoButton.enabled=false;
+					canvasState=CANVAS_STATE_PREV_BUTTON;
+					if(nextPhoto){
+						nextPhoto.unloadFullImage();
+					}
+					nextPhoto=photo;
+					nextPhotoButton.enabled=true;
+					setPhoto(prevPhoto);
+				}
+			}
+
+			
+			private function setPosition(image:Image_):void{
+				ShowImage.x= width/2 - image.getScaledWidth()/2;
+				//ShowImage.y= ((height - actionsCanvas.height) + (AlbumBack.y + ALBUM_BUTTON_HEIGHT))/2 - image.getScaledHeight()/2;
+				ShowImage.y= ((height - actionsCanvas.height) + (AlbumBack.y))/2 - image.getScaledHeight()/2;
+			}
+			
+			public function returnToAlbum():void{				
+				if(cropControl!=null){
+					PopUpManager.removePopUp(cropControl);
+					cropControl=null;
+					actionsCanvas.CropBtn.enableFlag(true);
+				}
+				/*if(prevPhoto){
+					prevPhoto.unloadFullImage();
+				}
+				if(nextPhoto){
+					nextPhoto.unloadFullImage();
+				}
+				photo.unloadFullImage();*/
+				FlexGlobals.topLevelApplication.loadAlbum(photo.getAlbum());
+				canvasState=CANVAS_STATE_NEW;
+			}
+			
+			public function onAlbumBack():void{
+				if(setPhotoTimer!=null){
+					setPhotoTimer.stop();
+					setPhotoTimer.removeEventListener(TimerEvent.TIMER, onSetPhotoComplete);
+					setPhotoTimer=null;
+				}
+				var clickArr:Array = new Array();
+				clickArr["type"]=Consts.CLICK_ALBUM_BACK;				
+				FlexGlobals.topLevelApplication.recordClickData(clickArr);				
+				if(photo.getFullSizedImage().isEdited() && !photo.getFullSizedImage().isPublished()){
+					var editContinue:EditContinueTW = new EditContinueTW();
+					PopUpManager.addPopUp(editContinue, this, true);
+					editContinue.currentState='Album';
+					editContinue.setPhoto(photo);
+					editContinue.setCanvas(this);
+				}
+				else{
+					returnToAlbum();
+				}
+			}
+		]]>		
+	</mx:Script>	
+</mx:Canvas>

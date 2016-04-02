@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Button initialize="onInit()" xmlns:mx="http://www.adobe.com/2006/mxml">
+	<mx:Script>
+		<![CDATA[
+			[Embed("assets/skin/pointer.png")]
+			private const pointer_skin:Class;
+			
+			private function onInit():void{
+				setStyle("skin", pointer_skin);
+				setStyle("upSkin", pointer_skin);
+				setStyle("overSkin", pointer_skin);
+				setStyle("downSkin", pointer_skin);
+				setStyle("disabledSkin", pointer_skin);
+				useHandCursor=false;
+				buttonMode=false;
+				enabled=false;
+				//setStyle("icon", buttonIcon);				
+			}		
+			
+		]]>		
+	</mx:Script>
+</mx:Button>

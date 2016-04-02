@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:List xmlns:mx="http://www.adobe.com/2006/mxml"
+		 width="256" height="200" backgroundAlpha="1" backgroundColor="#FFFFFF" borderStyle="none" selectedIndex="1"
+		 borderThickness="0" columnCount="1" focusEnabled="false" focusRect="false" allowMultipleSelection="true" initialize="onInit()"
+		 horizontalScrollPolicy="off" verticalScrollPolicy="off" itemRenderer="comp.FriendCanvas" paddingBottom="0" itemClick="onItemClick(event)" 
+		 paddingLeft="0" paddingRight="0" paddingTop="0" rowCount="5" selectable="true" allowDragSelection="true"
+		 useRollOver="false">
+	<mx:Script>
+		<![CDATA[
+			import actionObj.Consts;
+			import actionObj.actions.IAction;
+			import actionObj.event.ClickFriendEvent;
+			import actionObj.event.EditListEvent;
+			import actionObj.event.SelectFriendEvent;
+			import actionObj.image.ActionImageData;
+			import actionObj.image.Friend;
+			import actionObj.image.Image_;
+			import actionObj.image.Photo;
+			
+			import flash.trace.Trace;
+			
+			import mx.collections.ArrayCollection;
+			import mx.containers.HBox;
+			import mx.controls.Image;
+			import mx.core.Application;
+			import mx.core.UIComponent;
+			import mx.events.ListEvent;
+			
+			import spark.components.supportClasses.ItemRenderer;
+			
+			private var selectedIds:Array = new Array();
+			
+			public function onInit():void{
+				addEventListener("SelectFriendEvent", onSelectFriend);
+			}
+			
+			public function onSelectFriend(selectEvent:SelectFriendEvent):void{
+				var friendCanvas:FriendCanvas = selectEvent.friendCanvas;
+				var friendsList:ArrayCollection=ArrayCollection(dataProvider);
+				for each (var friend:Friend in friendsList){
+					if(friend.id==selectEvent.friend.id){
+						selectedIndex=friendsList.getItemIndex(friend);
+					}
+				}
+			}
+
+			public function onItemClick(event:ListEvent):void{
+				var friendsList:ArrayCollection=ArrayCollection(dataProvider);
+				var friend:Friend=Friend(friendsList.getItemAt(selectedIndex));
+				var friendCanvas:FriendCanvas = FriendCanvas(event.itemRenderer);
+				friendCanvas.selectedBox.selected=true;
+			}
+			
+			public function setImages():void{
+				var friendsList:ArrayCollection=ArrayCollection(dataProvider);
+				for each (var friend:Friend in friendsList){
+					var rendererCanvas:FriendCanvas=FriendCanvas(itemToItemRenderer(friend));
+					if(rendererCanvas!=null){
+						rendererCanvas.setImage();
+					}
+				}
+			}
+			
+			public function setCheckBoxes(checkedList:Array):void{
+				var friendsList:ArrayCollection=ArrayCollection(dataProvider);
+				var bFound:Boolean=false;
+				for each (var friend:Friend in friendsList){
+					for (var i:int=0; i < checkedList.length; i ++){
+						if(friend.id==checkedList[i]){
+							bFound=true;
+						}
+					}
+					if(bFound){
+						var rendererCanvas:FriendCanvas=FriendCanvas(itemToItemRenderer(friend));
+						if(rendererCanvas!=null){
+							rendererCanvas.setImage();
+							rendererCanvas.selectCheckBox();
+						}
+					}
+				}				
+			}
+		]]>			
+	</mx:Script>
+</mx:List>

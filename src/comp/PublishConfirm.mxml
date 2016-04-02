@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:TitleWindow xmlns:mx="http://www.adobe.com/2006/mxml" borderAlpha="1.0" x = "75" y = "200" headerHeight="1" 
+				verticalScrollPolicy="off" horizontalScrollPolicy="off" close="onClose()"
+				layout="absolute"  initialize="onInit()" width="650" height="230" horizontalAlign="center" 
+				showCloseButton="true" fontSize="12" borderColor="#4D4D4D" cornerRadius="0" color="#FA0000" 
+				backgroundColor="#F6EFEF" borderStyle="solid" borderThickness="1">
+	<mx:Label x="175" y="98" text="Your picture is now on facebook" width="278" fontWeight="bold" id="PostPicLabel" color="#130101" fontSize="13"/>
+	<mx:Script>	
+		<![CDATA[
+			import mx.managers.PopUpManager;
+			
+			public function onInit():void{
+				
+			}
+			
+			public function onClose():void{
+				PopUpManager.removePopUp(this);
+			}
+		]]>		
+	</mx:Script>	
+</mx:TitleWindow>
+

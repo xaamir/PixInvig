@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:mx="http://www.adobe.com/2006/mxml"
+		   xmlns:comp="comp.*"
+		   width="760" height="600" horizontalScrollPolicy="off" initialize="onInit()"
+		   verticalScrollPolicy="off">
+	<comp:PicsTile id="albumList" x="70" y="82" showEffect="ListDissolve"/>
+	<mx:Label id="AlbumName" x="253" y="32" width="299" color="#FFFFFF" fontFamily="Arial"
+			  fontSize="30" text="ALBUM NAME"/>
+	<comp:AlbumsButton id="AlbumsBack" x="10" y="38" buttonMode="true" click="onAlbumsBack(event)"
+					   fontSize="8" toolTip="Back to Albums" useHandCursor="true"/>
+	<mx:Label x="379" y="552" color="#FFFFFF" fontFamily="Arial" fontSize="16" text="/"
+			  textAlign="center"/>
+	<mx:Label id="LabelBegPage" x="356" y="551" width="30" height="30" color="#FFFFFF"
+			  fontFamily="Arial" fontSize="16" text="12" textAlign="center"/>
+	<mx:Label id="LabelEndPage" x="394" y="551" width="30" height="30" color="#FFFFFF"
+			  fontFamily="Arial" fontSize="16" text="45" textAlign="center"/>
+	<comp:RightSmallButton id="RightButton" x="421" y="552" buttonMode="true" click="onAlbumsDown()"
+						   useHandCursor="true"/>
+	<comp:LeftSmallButton id="LeftButton" x="339" y="552" buttonMode="true" click="onAlbumsUp()"
+						  useHandCursor="true"/>
+	
+	<mx:Script>
+		<![CDATA[
+			import actionObj.Consts;
+			import actionObj.image.Album;
+			
+			import mx.core.Application;
+			import mx.core.FlexGlobals;
+			import mx.effects.Dissolve;
+			import mx.effects.Fade;
+			import mx.effects.WipeLeft;
+			import mx.effects.WipeRight;
+
+		public var album:Album=null;
+
+		public function onInit():void{
+			var f:DropShadowFilter = new DropShadowFilter(5,90,0,.4);
+			var myFilters:Array = new Array();
+			myFilters.push(f);
+			AlbumName.filters=myFilters;
+		}
+			
+		public function onAlbumsBack(e:Event):void{
+			FlexGlobals.topLevelApplication.onAlbumsPreloaded(album);
+			if(album){
+				album.unloadAlbum();
+			}
+			var clickArr:Array = new Array();
+			clickArr["type"]=Consts.CLICK_ALBUMS_BACK;
+			FlexGlobals.topLevelApplication.recordClickData(clickArr);			
+		}
+
+		public function onAlbumsUp():void{
+			var clickArr:Array = new Array();
+			clickArr["type"]=Consts.CLICK_ALBUM_PREV;
+			FlexGlobals.topLevelApplication.recordClickData(clickArr);			
+			album.prevPage(); 
+			albumList.dataProvider=album.getPage();
+			setPageNo();
+			if(1==album.getPageNo()){
+				LeftButton.setEnabled(false);			
+			}
+			else{
+				LeftButton.setEnabled(true);
+			}
+			var rightEffect:WipeRight = new WipeRight(albumList);
+			rightEffect.duration=500;
+			rightEffect.play();
+		}
+		
+		public function onAlbumsDown():void{
+			var clickArr:Array = new Array();
+			clickArr["type"]=Consts.CLICK_ALBUM_NEXT;
+			FlexGlobals.topLevelApplication.recordClickData(clickArr);			
+			album.nextPage();				
+			albumList.dataProvider=album.getPage();
+			setPageNo();
+			if(album.getTotalPages()==album.getPageNo()){
+				RightButton.setEnabled(false);			
+			}
+			else{
+				RightButton.setEnabled(true);
+			}
+			var leftEffect:WipeLeft = new WipeLeft(albumList);
+			leftEffect.duration=500;
+			leftEffect.play();
+		}
+			
+		public function setAlbum(_album:Album):void{
+			album=_album;
+			var showEffect:Fade = new Fade(albumList);
+			showEffect.duration=1000;
+			showEffect.alphaFrom=1;
+			showEffect.alphaFrom=0;			
+			showEffect.play();			
+			AlbumName.text=album.getName();
+		}
+			
+		public function setPageNo():void{
+			LabelBegPage.text=album.getPageNo().toString();
+			LabelEndPage.text=album.getTotalPages().toString();
+			if(1==album.getPageNo()){
+				LeftButton.setEnabled(false);		
+			}
+			else{
+				LeftButton.setEnabled(true);
+			}
+			if(album.getTotalPages()==album.getPageNo()){
+				RightButton.setEnabled(false);			
+			}
+			else{
+				RightButton.setEnabled(true);
+			}
+		}
+		]]>		
+	</mx:Script>
+</mx:Canvas>

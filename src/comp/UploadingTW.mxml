@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:TitleWindow xmlns:mx="http://www.adobe.com/2006/mxml"
+				xmlns:controls="controls.*"
+				width="180" height="38" backgroundAlpha="0.6" backgroundColor="#181818"
+				borderThicknessLeft="0" borderThicknessRight="0" borderThicknessTop="0" creationCompleteEffect="WipeLeft"
+				borderStyle="none" borderThickness="0" cornerRadius="0" headerHeight="0" borderThicknessBottom="0"
+				horizontalScrollPolicy="off" layout="absolute" verticalScrollPolicy="off">	
+	<mx:TextArea id="controlText" x="24" y="5" width="156" height="29" backgroundAlpha="0" borderThickness="0"
+				 borderStyle="none" color="#E3E3E3" cornerRadius="4" fontFamily="Arial" fontSize="13"
+				 fontStyle="normal" fontWeight="normal"
+				 text="Uploading to facebook"
+				 textAlign="center"/>
+	<controls:Spinner size="10" x="11" y="11" tickColor="#66aaff"/>	
+	<mx:WipeLeft id="PanelWipeLeft" duration="800"/>
+	<mx:Script>	
+		<![CDATA[
+			private var refCount:int=0; 
+			public function addRefCount():void{
+				refCount++;
+			}
+			
+			public function defRecCount():void{
+				refCount--;
+			}
+			
+			public function getRefCount():int{
+				return refCount;
+			}
+			
+		]]>		
+	</mx:Script>		
+</mx:TitleWindow>

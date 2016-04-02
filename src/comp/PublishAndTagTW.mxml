@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:TitleWindow xmlns:mx="http://www.adobe.com/2006/mxml"
+				xmlns:comp="comp.*"
+				xmlns:controls="controls.*"
+				x="200" y="100" width="306" height="308" alpha="1" backgroundAlpha="0.65"
+				backgroundColor="#320909" borderStyle="solid" borderThickness="2"
+				borderThicknessBottom="0" borderThicknessLeft="0" borderThicknessRight="0"
+				borderThicknessTop="0" cornerRadius="4" fontSize="13" headerHeight="0"
+				horizontalScrollPolicy="off" initialize="onInit()" layout="absolute"
+				paddingBottom="0" paddingLeft="0" paddingRight="0" verticalScrollPolicy="off">	
+	<mx:states>
+		<mx:State name="Crop">
+			<mx:SetProperty name="text" target="{Title}" value="Publish Cropped Photo?"/>
+			<mx:RemoveChild target="{ShareConfirm}"/>
+			<mx:AddChild position="lastChild">
+				<comp:CropConfirmButton x="168" y="59" id="CropConfirm" click="onPublish()"/>
+			</mx:AddChild>
+		</mx:State>
+		<mx:State name="Focus">
+			<mx:RemoveChild target="{ShareConfirm}"/>
+			<mx:AddChild position="lastChild">
+				<comp:FocusConfirmButton click="onPublish()" id="FocusConfirm" x="168" y="59"/>
+			</mx:AddChild>
+			<mx:SetProperty name="text" target="{Title}" value="Publish Focused Photo?"/>
+		</mx:State>
+		<mx:State name="Filter">
+			<mx:RemoveChild target="{ShareConfirm}"/>
+			<mx:AddChild position="lastChild">
+				<comp:FilterConfirmButton click="onPublish()" id="FilterConfirm" x="168" y="59"/>
+			</mx:AddChild>
+			<mx:SetProperty name="text" target="{Title}" value="Publish Filtered Photo?"/>
+		</mx:State>
+		<mx:State name="Desat">
+			<mx:RemoveChild target="{ShareConfirm}"/>
+			<mx:AddChild position="lastChild">
+				<comp:DesatConfirmButton click="onPublish()" id="DesatConfirm" x="168" y="59"/>
+			</mx:AddChild>
+			<mx:SetProperty name="text" target="{Title}" value="Publish Desaturated Photo?"/>
+		</mx:State>
+	</mx:states>
+	<mx:Label id="Title" x="10" y="9" width="262" height="31" color="#FBFDFD" fontFamily="Arial"
+			  fontSize="16" text="Ready to publish?" textAlign="center"/>
+	<comp:AlbumImg id="Thumb" x="12" y="59"/>
+	<comp:CancelButton x="168" y="103" click="onCancel()"/>	
+	<mx:Label id="label1" x="15" y="218" width="213" color="#FFFFFF" fontFamily="Arial"
+			  text="Add a Comment (optional)"/>
+	<comp:ShareConfirmButton id="ShareConfirm" x="168" y="59" click="onPublish()"/>	
+	<mx:TextArea id="Comments" x="12" y="244" width="282" click="onCommentsClick()" fontFamily="Arial"
+				 fontSize="10" maxChars="200" text=""/>	
+	<mx:Script>	
+		<![CDATA[
+			import actionObj.Consts;
+			import actionObj.event.ClickFriendEvent;
+			import actionObj.image.Friend;
+			import actionObj.image.Photo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.core.FlexGlobals;
+			import mx.managers.PopUpManager;
+			
+			public var photo:Photo;
+			public var canvas:EditorActionsCanvas;
+			public var story:String;
+						
+			
+			public function onCommentsClick():void{
+				if(Comments.text=="Add Comments to the photo (optional)"){
+					Comments.text="";
+				}
+			}
+			
+			public function onPublish():void{
+				if(Comments.text=="Add Comments to the photo (optional)"){
+					Comments.text="";
+				}
+				canvas.publishPic(null, Comments.text, story);
+				var clickArr:Array = new Array();
+				if (currentState=="Crop") {
+					clickArr["type"]=Consts.CLICK_PUBLISH_CROP;									
+				}
+				else if (currentState=="Filter") {
+					clickArr["type"]=Consts.CLICK_PUBLISH_FILTER;									
+				} 
+				else if (currentState=="Focus") {
+					clickArr["type"]=Consts.CLICK_PUBLISH_FOCUS;									
+				} 
+				else if (currentState=="Desat") {
+					clickArr["type"]=Consts.CLICK_PUBLISH_DESAT;									
+				} 
+				else {
+					clickArr["type"]=Consts.CLICK_PUBLISH_SHARE;									
+				} 
+				FlexGlobals.topLevelApplication.recordClickData(clickArr);				
+
+				PopUpManager.removePopUp(this);
+			}
+			
+			public function setPhoto(_photo:Photo):void{
+				photo=_photo; 
+				Thumb.source=_photo.getAlbumImage().returnImageSource();
+			}
+			
+			public function setCanvas(_canvas:EditorActionsCanvas):void{
+				canvas=_canvas;
+			}
+			
+			public function  onCancel():void{
+				var clickArr:Array = new Array();
+				if (currentState=="Crop") {
+					clickArr["type"]=Consts.CLICK_CANCEL_CROP;									
+				}
+				else if (currentState=="Filter") {
+					clickArr["type"]=Consts.CLICK_CANCEL_FILTER;									
+				} 
+				else if (currentState=="Focus") {
+					clickArr["type"]=Consts.CLICK_CANCEL_FOCUS;									
+				} 
+				else if (currentState=="Desat") {
+					clickArr["type"]=Consts.CLICK_CANCEL_DESAT;									
+				} 
+				else {
+					clickArr["type"]=Consts.CLICK_CANCEL_SHARE;									
+				} 
+				FlexGlobals.topLevelApplication.recordClickData(clickArr);				
+				PopUpManager.removePopUp(this);
+			}
+			
+			public function setStory(_story:String):void{
+				story=_story;
+			}
+			
+			public function onInit():void{
+				var f:DropShadowFilter = new DropShadowFilter(9,45,0,.5);
+				var myFilters:Array = new Array();
+				myFilters.push(f);
+				filters=myFilters;				
+			}			
+		]]>		
+	</mx:Script>		
+</mx:TitleWindow>

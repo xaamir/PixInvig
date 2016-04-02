@@ -1,0 +1,557 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Application xmlns:mx="http://www.adobe.com/2006/mxml"
+				xmlns:comp="comp.*"
+				xmlns:controls="controls.*"
+				width="760" height="600" horizontalAlign="center" horizontalScrollPolicy="off"
+				layout="absolute" preinitialize="onPreInit()" preloader="utilities.Preloader"
+				creationComplete="onCreateComplete()"  
+				verticalScrollPolicy="off">
+	<mx:states>
+		<mx:State name="AlbumCollection">
+			<mx:AddChild position="lastChild" relativeTo="{MainCanvas}">
+				<comp:MainPageCanvas id="MainPageCanvas" x="0" y="0">
+				</comp:MainPageCanvas>
+			</mx:AddChild>
+		</mx:State>
+		<mx:State name="Album">
+			<mx:AddChild position="lastChild" relativeTo="{MainCanvas}">
+				<comp:AlbumCanvas id="albumCanvas" x="0" y="0">
+				</comp:AlbumCanvas>
+			</mx:AddChild>		
+		</mx:State>
+		<mx:State name="Editor">
+			<mx:AddChild position="lastChild" relativeTo="{MainCanvas}">
+				<comp:EditorCanvas id="photoEditor" x="0" y="0">
+				</comp:EditorCanvas>
+			</mx:AddChild>
+		</mx:State>
+		<mx:State name="Loading">
+			<mx:AddChild position="lastChild" relativeTo="{MainCanvas}">
+				<mx:Image x="0" y="0" width="760" height="600" source="@Embed('assets/rementos_cover_wood.jpg')"/>
+			</mx:AddChild>
+			<mx:AddChild position="lastChild" relativeTo="{MainCanvas}">
+				<controls:Spinner id="spinner" x="360" y="110" tickColor="#66aaff"/>
+			</mx:AddChild>
+		</mx:State>
+	</mx:states>
+	<mx:Canvas id="MainCanvas" x="0" y="0" width="760" height="600" horizontalScrollPolicy="off" verticalScrollPolicy="off">
+		<mx:Image id="image1" x="0" y="0" width="760" height="600" source="@Embed('../assets/interface/bg_texture.jpg')"/>
+	</mx:Canvas>
+	<mx:HTTPService id="fetchAlbumList" resultFormat="text" result="albumDataHandler(event);" useProxy="false" method="POST">
+	</mx:HTTPService>
+	<mx:HTTPService id="postClickData" resultFormat="text" result="clickDataHandler(event);" useProxy="false" method="POST">
+	</mx:HTTPService>
+	<mx:HTTPService id="checkPermission" resultFormat="text" result="permissionHandler(event);" useProxy="false" method="POST">
+	</mx:HTTPService>
+	<mx:HTTPService id="fetchFriendsList" resultFormat="text" result="friendsDataHandler(event);" useProxy="false" method="POST">
+	</mx:HTTPService>
+	<mx:Style>
+		@font-face {
+			src: url("assets/fonts/Exo-Regular.ttf");
+			fontFamily: Exo;
+			unicodeRange: U+0020-U+002F,U+0030-U+0039,U+003A-U+0040,U+0041-U+005A,U+005B-U+0060,U+0061-U+007A,U+007B-U+007E;
+			embed-as-cff:false;
+			advancedAntiAliasing:true;
+		}
+	</mx:Style>
+	<mx:Style>
+		@font-face {
+			src: url("assets/fonts/Exo-Bold.ttf");
+			fontFamily: Exo;
+			unicodeRange: U+0020-U+002F,U+0030-U+0039,U+003A-U+0040,U+0041-U+005A,U+005B-U+0060,U+0061-U+007A,U+007B-U+007E;
+			embed-as-cff:false;
+			fontThickness: -200;
+			fontSharpness: 400;
+			advancedAntiAliasing:true;
+		}
+	</mx:Style>
+	<mx:Style>
+		@font-face {
+			src: url("assets/fonts/arial.ttf");
+			fontFamily: Arial;
+			unicodeRange: U+0020-U+002F,U+0030-U+0039,U+003A-U+0040,U+0041-U+005A,U+005B-U+0060,U+0061-U+007A,U+007B-U+007E;
+			embed-as-cff:false;
+			advancedAntiAliasing:true;
+		}
+	</mx:Style>
+	<mx:Style>
+		@font-face {
+			src: url("assets/fonts/arialbd.ttf");
+			fontFamily: Arial;
+			unicodeRange: U+0020-U+002F,U+0030-U+0039,U+003A-U+0040,U+0041-U+005A,U+005B-U+0060,U+0061-U+007A,U+007B-U+007E;
+			embed-as-cff:false;
+			fontThickness: -200;
+			fontSharpness: 400;
+			advancedAntiAliasing:true;
+		}
+	</mx:Style>
+	<mx:Script>		
+		<![CDATA[		
+			import actionObj.Consts;
+			import actionObj.actions.filters.*;
+			import actionObj.event.ClickFriendEvent;
+			import actionObj.image.Album;
+			import actionObj.image.AlbumCollection;
+			import actionObj.image.FBAlbumUpload;
+			import actionObj.image.FBPhoto;
+			import actionObj.image.Friend;
+			import actionObj.image.ImageLoadTimer;
+			import actionObj.image.PermissionsCheckTimer;
+			import actionObj.image.Photo;
+			import actionObj.image.PhotoCollection;
+			
+			import com.adobe.serialization.json.JSON;
+			
+			import comp.UploadedTW;
+			import comp.UploadingTW;
+			
+			import mx.collections.ArrayCollection;
+			import mx.core.FlexGlobals;
+			import mx.rpc.events.ResultEvent;
+			
+			private var fbId:String = "100000121333865";
+			private var fbIdDisplayUser:String="100000121333865";
+			
+			private var accessToken:String;
+			//public var m_fbId:String = "100000761032978";//aq
+			private var appId:String;
+			private var dir:String;
+			private var sessionTime:String="0";
+			private var objectType:String="invig-test";
+			private var publish:String="Y";
+			private var publishToggle:Boolean=false;
+			private var feedPosted:Boolean=false;
+			private var countPics:int = 0;
+			public 	var m_url:String;
+			private var m_protocol:String = "https";
+			private var imageLoadTimer:ImageLoadTimer = null;
+			private var permissionsCheckTimer:PermissionsCheckTimer=null;	
+			private var g_AlbumCollectionAssoc:Array=new Array(); // an associative array holding friend album collections which hold all the albums and the photos
+			public 	var g_loaderContext:LoaderContext = null;
+			private var g_url:String = "www.rementoapp.com";
+			private var g_albumUpload:FBAlbumUpload=null;
+			private var g_twUpload:UploadingTW=null;
+			private var g_twUploadCompleted:UploadedTW=null;
+			private var g_friendsFetched:Boolean=false;
+			private var g_friendsArr:ArrayCollection=null;
+			
+			public function getUserFbId():String{
+				return fbId;
+			}
+			
+			public function getDir():String{
+				if(dir==null){
+					return "_vti_pda";
+				}
+				else{
+					return dir;
+				}
+			}
+			
+			public function getSessionTime():String{
+				return sessionTime;
+			}
+			
+			public function getObjectType():String{
+				return objectType;
+			}
+			
+			public function onDisplayUserPics(event:Event):void{
+				currentState="AlbumCollection";
+				fbIdDisplayUser=fbId;
+				var clickArr:Array = new Array();
+				clickArr["type"]=Consts.CLICK_VIEW_SELF_PHOTOS;				
+				recordClickData(clickArr);								
+			}
+			
+			public function getDisplayUserFbId():String{
+				return fbIdDisplayUser;
+			}
+			
+			public function returnAlbumCollection():AlbumCollection{
+				return g_AlbumCollectionAssoc[fbIdDisplayUser];
+			}
+				
+			public function onRemove():void{
+			}
+			
+			public function onFriend(event:ClickFriendEvent):void{
+				var albumParams:Object = {};
+				fbIdDisplayUser=event.friend.id;
+				albumParams["fb_id"] = fbId;
+				albumParams["display_id"] = event.friend.id;
+				albumParams["dir"] = dir;
+				if(g_AlbumCollectionAssoc[fbIdDisplayUser]==null){
+					fetchAlbumList.send(albumParams);
+				}
+				else{
+				}
+				var clickArr:Array = new Array();
+				clickArr["type"]=Consts.CLICK_VIEW_FRIEND;				
+				recordClickData(clickArr);				
+			}
+			
+			public function onPreInit():void{
+				currentState="Loading";
+				Security.loadPolicyFile("https://fbcdn-profile-a.akamaihd.net/crossdomain.xml");
+				Security.allowDomain("*");
+				Security.allowInsecureDomain("*");  			
+				g_loaderContext = new LoaderContext(true);
+				g_loaderContext.checkPolicyFile = true;
+				g_loaderContext.applicationDomain = ApplicationDomain.currentDomain;
+				
+				if(parameters.accessToken){
+					accessToken=parameters.accessToken;	
+				}		
+				if(parameters.appId){
+					appId=parameters.appId;	
+				}		
+				if(parameters.fbId){
+					fbId = parameters.fbId;
+					fbIdDisplayUser=fbId;
+				}
+				if(parameters.protocol){
+					m_protocol = parameters.protocol;
+				}
+				if (parameters.dir){
+					dir = parameters.dir;
+				}
+				if (parameters.action_type){
+					objectType = parameters.action_type;
+				}
+				if(parameters.publish){
+					publish=parameters.publish;
+				}
+				if(parameters.sessionTime){
+					sessionTime=parameters.sessionTime;					
+				}
+				m_url =  m_protocol + "://" + g_url +  "/";
+				if(dir){
+					m_url+= dir + "/";
+				}
+				else{
+					m_url+=  "_vti_pda" + "/";
+				}
+				postClickData.url=m_url + "postClick.php";
+				fetchAlbumList.url= m_url + "FetchAlbums.php";
+				checkPermission.url = m_url + "checkPermission.php";
+				var albumParams:Object = {};
+				albumParams["fb_id"] = fbId;
+				albumParams["dir"] = dir;
+				fetchAlbumList.send(albumParams);
+			}
+			
+			public function onInitComplete():void{
+				if(spinner!=null){
+					spinner.play();
+				}
+				
+			}
+			
+			public function getUploadAlbum():FBAlbumUpload{
+				if(g_albumUpload==null){
+					g_albumUpload = new FBAlbumUpload(g_AlbumCollectionAssoc[fbIdDisplayUser]);
+				}
+				return g_albumUpload;
+			}
+			
+			public function onCreateComplete():void{
+			}
+			
+			//----------------------------------------------------------------------
+			// Apparently, there's nothing in the event object that says whether
+			// the keyboard event was a Key Down or Key Up event. That's decided
+			// when you create an event listener. So we need these 2 extra methods
+			// to let the keyboardEventHandler() know which type key event it was.
+			private function keyboardDownEventHandler( event:KeyboardEvent ):void
+			{
+				var keyDown:Boolean = true;
+				keyboardEventHandler( keyDown, event );
+			}
+			private function keyboardUpEventHandler( event:KeyboardEvent ):void
+			{
+				var keyDown:Boolean = false;
+				keyboardEventHandler( keyDown, event );
+			}
+			
+			private function keyboardEventHandler( keyDown:Boolean, event:KeyboardEvent ):void
+			{
+				if(currentState=="Editor"){
+					photoEditor.keyboardEventHandler(keyDown, event);
+				}
+				// See this Adobe webpage for a full list of AS3 Keyboard Constants:
+				// http://help.adobe.com/en_US/FlashPlatform/reference/actionscript/3/flash/events/KeyboardEvent.html#!flash/ui/Keyboard.html
+				// More info here:
+				// http://help.adobe.com/en_US/ActionScript/3.0_ProgrammingAS3/WS5b3ccc516d4fbf351e63e3d118a9b90204-7d01.html
+				// http://help.adobe.com/en_US/FlashPlatform/reference/actionscript/3/flash/events/KeyboardEvent.html
+				// Keyboard.CONTROL   == 17  (Ctrl key)
+				// Keyboard.ALTERNATE == 18  (Alt key)
+				// Keyboard.SHIFT     == 16  (Shift key)
+				// Keyboard.ENTER     == 13  (Enter key)
+				// Keyboard.ESCAPE    == 27  (ESC key)
+				// Keyboard.F1        == 112 (F1 key)
+				// Keyboard.F2        == 113 (F2 key)
+				// Keyboard.SPACE     == 32  (Spacebar key)
+				// etc.
+				
+				// Both keys can be down at the same time, but we'll assume they can't be,
+				// and just check for the Control key first, then the Shift key.
+			}
+			
+			public function friendsDataHandler(event:ResultEvent):void{
+				var data:String = event.result.toString();
+				var friendArr:Array= com.adobe.serialization.json.JSON.decode(data) as Array;
+				if(friendArr!=null){
+					if(g_friendsArr==null){
+						g_friendsArr=new ArrayCollection();
+					}
+					for (var i:int = 0; i < friendArr.length; i++){
+						var friend:Friend = new Friend(friendArr[i]['name'], friendArr[i]['pic_square'], friendArr[i]['uid']);
+						g_friendsArr.addItem(friend);
+					}
+				}
+			}
+			
+			public function returnFriendsList():ArrayCollection{
+				return g_friendsArr;
+			}
+			
+			public function albumDataHandler(event:ResultEvent):void{
+				var data:String = event.result.toString();
+				var albumCollectionObj:Array = com.adobe.serialization.json.JSON.decode(data) as Array;
+				//var albumColl:Object = com.adobe.serialization.json.JSON.decode(data);
+				if(albumCollectionObj==null){
+					trace("no album collection found - probably not using a valid FB session");
+					currentState="AlbumCollection";
+				}
+				var albumCollection:ArrayCollection = new ArrayCollection(albumCollectionObj);
+				g_AlbumCollectionAssoc[fbIdDisplayUser]=new AlbumCollection(albumCollection);
+			}
+			
+			public function clickDataHandler(event:ResultEvent):void{
+			}
+			
+			/*public function onTextClick():void{
+				if(FriendName.text=="Type a friend's name"){
+					FriendName.text="";
+				}
+			}*/
+			
+			public function onAlbumsPreloaded(album:Album):void{
+				currentState="AlbumCollection";
+			}			
+			
+			//dynamically refresh the album collection screen
+			public function onAlbumPreloaded(photo:Photo):void{
+				if(currentState=="AlbumCollection"){
+					this.MainPageCanvas.setAlbumCoord(photo.getAlbum());
+					this.MainPageCanvas.setPic(photo);
+					if (returnAlbumCollection().getTotalPages() > 1) {
+						this.MainPageCanvas.enableNextButton();
+					}
+				}
+			}
+			
+			public function onClickPhoto(_photo:Photo):void{
+				var clickArr:Array = new Array();
+				clickArr["type"]=Consts.CLICK_PHOTO;				
+				FlexGlobals.topLevelApplication.recordClickData(clickArr);					
+				if(_photo.isFullPicLoaded()){
+					setEditorState(_photo);
+				}
+				else{
+					if(_photo.isFullImageLoading()) return;
+					_photo.loadFullImage();
+					imageLoadTimer = new ImageLoadTimer(100, 0, _photo);
+					imageLoadTimer.addEventListener(TimerEvent.TIMER, onImageLoadTick);
+					imageLoadTimer.start();
+				}
+			}
+			
+			public function onImageLoadTick(e:TimerEvent):void{
+				var imageLoadTimer:ImageLoadTimer = ImageLoadTimer(e.target);
+				var photo:Photo =  imageLoadTimer.photo;
+				if(photo.isFullPicLoaded() && currentState!="Editor"){
+					setEditorState(photo);
+					imageLoadTimer.stop();
+					imageLoadTimer.removeEventListener(TimerEvent.TIMER,onImageLoadTick);
+					imageLoadTimer=null;
+				}
+			}
+			
+			public function setEditorState(_photo:Photo):void{
+				if(!stage.hasEventListener( KeyboardEvent.KEY_DOWN)){
+					stage.addEventListener( KeyboardEvent.KEY_DOWN, keyboardDownEventHandler );
+				}
+				if(!stage.hasEventListener( KeyboardEvent.KEY_UP)){
+					stage.addEventListener( KeyboardEvent.KEY_UP,   keyboardUpEventHandler );
+				}
+				currentState="Editor";
+				if(g_twUploadCompleted!=null){
+					MainCanvas.removeChild(g_twUploadCompleted);
+				}
+				if(g_twUpload!=null){
+					MainCanvas.removeChild(g_twUpload);
+				}
+				photoEditor.setPhoto(_photo);
+				if(g_twUploadCompleted!=null){
+					MainCanvas.addChild(g_twUploadCompleted);
+				}
+				if(g_twUpload!=null){
+					MainCanvas.addChild(g_twUpload);
+				}
+				photoEditor.actionsCanvas.scroller.contents.removeAllChildren();
+				photoEditor.actionsCanvas.setListData();
+				//_photo.getAlbum().unloadAlbum();
+			}
+			
+			public function loadAlbum(album:Album):void{
+				currentState="Album";
+				albumCanvas.setAlbum(album);
+				album.loadPage();
+				albumCanvas.albumList.dataProvider=album.getPage();
+				albumCanvas.setPageNo();
+				var clickArr:Array = new Array();
+				clickArr["type"]=Consts.CLICK_ALBUM;				
+				FlexGlobals.topLevelApplication.recordClickData(clickArr);					
+			}
+			
+			public function onPicLoaded(photo:Photo):void{
+				if(currentState=="Album"){
+					albumCanvas.albumList.dataProvider=photo.getAlbum().getPage();
+					albumCanvas.setPageNo();
+				}
+				else if (currentState=="AlbumCollection"){
+					this.MainPageCanvas.setPic(photo);
+				}
+			} 
+			
+			public function recordClickData(clickArray:Array):void{
+				clickArray["fb_id"] = fbId;
+				clickArray["session_time"]=getSessionTime();
+				postClickData.send(clickArray);				
+			}
+			
+			public function recordMultipleClickData(clickArray:Array):void{
+				var strClicks:String = clickArray.join(",");
+				var multiClickArr:Array = new Array();
+				multiClickArr["fb_id"] = fbId;
+				multiClickArr["multiple"] = 'Y';
+				multiClickArr["clicks"] = strClicks;
+				multiClickArr["session_time"]=getSessionTime();
+				postClickData.send(multiClickArr);				
+			}
+
+			public function hasPublishPermission():Boolean{
+				if(publish=='N' || publish=='n'){
+					return false;
+				}
+				else{
+					return true;
+				}
+			}
+			
+			public function getPermissions():void{
+				if(ExternalInterface.available){
+					var clickArr:Array = new Array();
+					clickArr["type"]=Consts.CLICK_PERM_REQ;				
+					recordClickData(clickArr);					
+					var picParams:Object = {};
+					picParams["fb_id"] = fbId;
+					ExternalInterface.call("getPublishPermission", FlexGlobals.topLevelApplication.appId);	
+					checkPermission.send(picParams);
+				}
+			}
+			
+			public function postToTimeline():void{
+				if(ExternalInterface.available){
+					ExternalInterface.call("submitToTimeline", FlexGlobals.topLevelApplication.appId);
+				}				
+			}
+			
+			public function addUploadingTW():void{
+				if(g_twUploadCompleted){
+					MainCanvas.removeChild(g_twUploadCompleted);
+					g_twUploadCompleted=null;
+				}
+				if(!g_twUpload){
+					g_twUpload = new UploadingTW();
+					MainCanvas.addChild(g_twUpload);
+					g_twUpload.x=width - g_twUpload.width;
+					g_twUpload.y=0;
+				}
+				g_twUpload.addRefCount();
+			}
+
+			public function onCloseUploaded():void{
+				if(g_twUploadCompleted){
+					MainCanvas.removeChild(g_twUploadCompleted);
+					g_twUploadCompleted=null;
+				}
+			}
+			
+			public function getCountPics():int {
+				return countPics;
+			}
+			
+			public function uploadingComplete():void{
+				countPics++;
+				g_twUpload.defRecCount();
+				if(g_twUpload.getRefCount()==0){
+					MainCanvas.removeChild(g_twUpload);
+					g_twUpload=null;
+					if(!g_twUploadCompleted){
+						g_twUploadCompleted=new UploadedTW();
+						MainCanvas.addChild(g_twUploadCompleted);
+						g_twUploadCompleted.x=width - g_twUploadCompleted.width;
+						g_twUploadCompleted.y=0;
+					}
+				}
+			}
+			
+			public function inviteFriends():void{
+				if(ExternalInterface.available){
+					var clickArr:Array = new Array();
+					clickArr["type"]=Consts.CLICK_INVITE_FRIENDS;				
+					FlexGlobals.topLevelApplication.recordClickData(clickArr);					
+					ExternalInterface.call("inviteFriends",FlexGlobals.topLevelApplication.appId);						
+				}				
+			}
+						
+			public function permissionHandler(event:ResultEvent):void{
+				var data:String = event.result.toString();
+				var permissionArr:Object = com.adobe.serialization.json.JSON.decode(data);
+				publish=permissionArr['Permissions'];
+				if(publish=='Y' || publish=='y'){
+					var clickArr:Array = new Array();
+					clickArr["type"]=Consts.CLICK_PERM_ACCEPTED;
+					publishToggle=true;
+					FlexGlobals.topLevelApplication.recordClickData(clickArr);					
+					if(currentState=="Editor"){
+						photoEditor.actionsCanvas.publishPic(null, null);
+					}
+				}
+				else{// the code in php loops for about 60 secs after which it returns with 'N'. In case that the user says OK, it returns right away.
+					var picParams:Object = {};
+					picParams["fb_id"] = fbId;
+					checkPermission.send(picParams);					
+				}
+			}
+			
+			public function isFeedPosted():Boolean{
+				return feedPosted;
+			}
+			
+			public function setFeedPosted(postFlag:Boolean):void{
+				feedPosted=postFlag;
+			}
+			
+			/**
+			 * AQ: July 14th - not used anymore now that we seek all permissions upfront
+			 * */
+			public function didPermissionsToggle():Boolean{
+				return publishToggle;		
+			}
+		]]>			
+	</mx:Script>
+</mx:Application>

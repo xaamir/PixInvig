@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:mx="http://www.adobe.com/2006/mxml"
+		   xmlns:comp="comp.*"
+		   width="760" height="600" horizontalScrollPolicy="off" verticalScrollPolicy="off">
+	<mx:Image id="TopCloth" x="0" y="0" width="760" height="104"
+			  source="@Embed('../../assets/interface/fabric_texture.png')">
+	</mx:Image>	
+	<mx:Image id="RemetoLabel" x="8" y="12" width="250" height="70"
+			  source="@Embed('../../assets/interface/remento.png')">
+	</mx:Image>	
+	<mx:Label id="ClickAlbumLabel0" x="480" y="0" width="400" color="#FFFFFF" fontFamily="Arial" fontWeight="bold"
+			  fontSize="22" text="Click an Album or"/>
+	<mx:Label id="ClickAlbumLabel1" x="503" y="53" width="400" color="#FFFFFF" fontFamily="Arial" fontWeight="bold"
+			  fontSize="22" text="to get started"/>
+	<comp:UploadButton click="onUpload()" x="508" y="15"/>
+	<comp:AlbumCollectionCanvas id = "albumCollectionsCanvas" x="0" y="100">
+	</comp:AlbumCollectionCanvas>
+	<comp:LeftButton id="leftAlbumButton" x="10" y="294" click="onAlbumsLeft()" enabled="false"/>
+	<comp:RightButton id = "rightAlbumButton" x="710" y="294" click="onAlbumsRight()"  enabled="false"/>
+
+	<mx:Script>
+		<![CDATA[
+			import actionObj.Consts;
+			import actionObj.image.Album;
+			import actionObj.image.AlbumCollection;
+			import actionObj.image.FBAlbumUpload;
+			import actionObj.image.FBPhotoUpload;
+			import actionObj.image.Photo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.core.FlexGlobals;
+			
+			import utilities.AlbumCoordHelper;
+
+			static public var fileRefList:FileReference = new FileReference();			
+			
+			private var currentPageNum:int=0;
+			private var coordHelper:AlbumCoordHelper = new AlbumCoordHelper();
+					
+			
+			public function enableNextButton(): void {
+				this.rightAlbumButton.enabled=true;
+			}
+			
+			public function setAlbumCoord(album:Album): void{
+				this.albumCollectionsCanvas.setAlbumCoord(album);
+			}
+			
+			public function onAlbumsLeft():void{
+				var albumCollection:AlbumCollection = FlexGlobals.topLevelApplication.returnAlbumCollection();
+				albumCollection.prevPage();
+				var albumArr:ArrayCollection = albumCollection.getAlbumPageArr();
+				var newAlbumPg:AlbumCollectionCanvas = new AlbumCollectionCanvas();
+				newAlbumPg.setAlbums(albumArr);
+				newAlbumPg.x=albumCollectionsCanvas.x;
+				newAlbumPg.y=albumCollectionsCanvas.y;
+				this.removeChild(this.albumCollectionsCanvas);
+				this.addChild(newAlbumPg);
+				this.albumCollectionsCanvas=newAlbumPg;
+				if(1==albumCollection.getPageNo() || albumCollection.getTotalPages()==1){
+					this.leftAlbumButton.enabled=false;
+				}
+				else{
+					this.leftAlbumButton.enabled=true;					
+				}
+				if(albumCollection.getTotalPages()==1){
+					this.rightAlbumButton.enabled=false;
+				}
+				else{
+					this.rightAlbumButton.enabled=true;					
+				}
+			}
+			
+			public function onAlbumsRight():void{
+				var albumCollection:AlbumCollection = FlexGlobals.topLevelApplication.returnAlbumCollection();
+				albumCollection.nextPage();
+				var albumArr:ArrayCollection = albumCollection.getAlbumPageArr();
+				var newAlbumPg:AlbumCollectionCanvas = new AlbumCollectionCanvas();
+				newAlbumPg.setAlbums(albumArr);
+				newAlbumPg.x=albumCollectionsCanvas.x;
+				newAlbumPg.y=albumCollectionsCanvas.y;
+				this.removeChild(this.albumCollectionsCanvas);
+				this.addChild(newAlbumPg);
+				this.albumCollectionsCanvas=newAlbumPg;
+				this.leftAlbumButton.enabled=true;
+				if(albumCollection.getTotalPages()==albumCollection.getPageNo()){
+					this.rightAlbumButton.enabled=false;					
+				}
+				else{
+					this.rightAlbumButton.enabled=true;					
+				}
+			}
+			
+			public function onUpload():void{
+				var clickArr:Array = new Array();
+				clickArr["type"]=Consts.CLICK_UPLOAD_CLICK;				
+				FlexGlobals.topLevelApplication.recordClickData(clickArr);																		
+				var imageFilter:FileFilter = new FileFilter("Image Files (*.jpg, *.jpeg, *.gif, *.png)", "*.jpg; *.jpeg; *.gif; *.png");
+				fileRefList = new FileReference();
+				fileRefList.addEventListener(Event.SELECT, fileSelectHandler);	
+				fileRefList.addEventListener(Event.COMPLETE, fileCompleteHandler);				
+				try
+				{
+					var success:Boolean = fileRefList.browse(new Array(imageFilter));
+				}
+				catch (error:Error) 
+				{
+					trace("Unable to browse for files.");
+				}
+			}
+
+			public function setPic(photo:Photo): void{
+				this.albumCollectionsCanvas.setPic(photo);
+			}
+			
+			public function fileCompleteHandler(event:Event):void
+			{
+				var jj:int = 0;
+			}			
+
+			public function fileSelectHandler(event:Event):void
+			{
+				var clickArr:Array = new Array();
+				clickArr["type"]=Consts.CLICK_UPLOAD_INIT;				
+				FlexGlobals.topLevelApplication.recordClickData(clickArr);																		
+				var uploadAlbum:FBAlbumUpload = FlexGlobals.topLevelApplication.getUploadAlbum();
+				var uploadPhoto:FBPhotoUpload = new FBPhotoUpload(uploadAlbum, FlexGlobals.topLevelApplication.returnAlbumCollection(), fileRefList);
+				uploadAlbum.addPhoto(uploadPhoto);
+				FlexGlobals.topLevelApplication.onClickPhoto(uploadPhoto);
+			}			
+		]]>		
+	</mx:Script>
+</mx:Canvas>

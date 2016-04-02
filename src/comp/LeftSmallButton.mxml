@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Button initialize="onInit()" xmlns:mx="http://www.adobe.com/2006/mxml">
+	<mx:Script>
+		<![CDATA[
+			[Embed("assets/skin/left_small.png")]
+			private const left_skin:Class;
+			[Embed("assets/skin/left_small_disabled.png")]
+			private const left_disabled_skin:Class;
+			
+			private function onInit():void{
+				setStyle("skin", left_skin);
+				setStyle("upSkin", left_skin);
+				setStyle("overSkin", left_skin);
+				setStyle("downSkin", left_skin);
+				setStyle("disabledSkin", left_disabled_skin);
+				useHandCursor=true;
+				buttonMode=true;				
+				//setStyle("icon", buttonIcon);				
+			}
+			
+			public function setEnabled(flag:Boolean):void{
+				enabled=flag;
+				if(enabled){
+					useHandCursor=true;
+				}
+				else{
+					useHandCursor=false;
+				}
+			}
+			
+			
+		]]>		
+	</mx:Script>
+</mx:Button>

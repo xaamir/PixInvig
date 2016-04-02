@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:TitleWindow xmlns:mx="http://www.adobe.com/2006/mxml"
+				xmlns:comp="comp.*"
+				xmlns:controls="controls.*"
+				x="200" y="200" width="286" height="204" alpha="1" backgroundColor="#320909"
+				borderStyle="solid" borderThickness="2" borderThicknessBottom="0" initialize="onInit()"
+				borderThicknessLeft="0" borderThicknessRight="0" borderThicknessTop="0" backgroundAlpha="0.65"
+				cornerRadius="4" fontSize="13" headerHeight="0" horizontalScrollPolicy="off"
+				layout="absolute" paddingBottom="0" paddingLeft="0" paddingRight="0"
+				verticalScrollPolicy="off">	
+	<mx:states>
+		<mx:State name="Album">
+			<mx:AddChild position="lastChild">
+				<comp:GoToAlbumButton id="BacktoAlbum" x="172" y="146" useHandCursor="true" buttonMode="true" click="onAlbum()"/>
+			</mx:AddChild>
+		</mx:State>
+		<mx:State name="Next">
+			<mx:AddChild position="lastChild">
+				<comp:NextPicButton id="NextPic" x="172" y="146" useHandCursor="true" buttonMode="true" click="onNext()"/>
+			</mx:AddChild>
+		</mx:State>
+		<mx:State name="Prev">
+			<mx:AddChild position="lastChild">
+				<comp:PrevPicButton id="PrevPic" x="172" y="146" useHandCursor="true" buttonMode="true" click="onPrev()"/>
+			</mx:AddChild>
+		</mx:State>
+	</mx:states>
+	<comp:AlbumImg x="16" y="41" id="Thumb"/>
+	<comp:PublishButton x="172" y="51" useHandCursor="true" buttonMode="true" click="onPublish()" />
+	<comp:KeepEditingButton x="172" y="100" useHandCursor="true" buttonMode="true" click="onContinue()"/>
+	<mx:Label x="10" y="9" width="262" height="23" color="#FBFDFD" fontFamily="Arial" fontSize="13"
+			  text="Would you like to publish your changes?" textAlign="center"/>
+	<mx:Script>	
+		<![CDATA[
+			import actionObj.Consts;
+			import actionObj.image.Photo;
+			
+			import mx.core.FlexGlobals;
+			import mx.managers.PopUpManager;
+			
+			public var photo:Photo;
+			public var canvas:EditorCanvas;
+			
+			public function onAlbum():void{
+				var clickArr:Array = new Array();
+				clickArr["type"]=Consts.CLICK_EDIT_ALBUM;				
+				FlexGlobals.topLevelApplication.recordClickData(clickArr);				
+				PopUpManager.removePopUp(this);
+				canvas.returnToAlbum();
+			}
+			
+			public function onNext():void{
+				var clickArr:Array = new Array();
+				clickArr["type"]=Consts.CLICK_EDIT_NEXT;				
+				FlexGlobals.topLevelApplication.recordClickData(clickArr);				
+				PopUpManager.removePopUp(this);
+				canvas.onNext(false);
+			}
+			
+			public function onPrev():void{
+				var clickArr:Array = new Array();
+				clickArr["type"]=Consts.CLICK_EDIT_PREV;				
+				FlexGlobals.topLevelApplication.recordClickData(clickArr);				
+				PopUpManager.removePopUp(this);
+				canvas.onPrev(false);
+			}
+			
+			public function onContinue():void{
+				var clickArr:Array = new Array();
+				clickArr["type"]=Consts.CLICK_EDIT_CONTINUE;				
+				FlexGlobals.topLevelApplication.recordClickData(clickArr);				
+				PopUpManager.removePopUp(this);
+			}
+			
+			public function onPublish():void{
+				var clickArr:Array = new Array();
+				clickArr["type"]=Consts.CLICK_EDIT_PUBLISH;				
+				FlexGlobals.topLevelApplication.recordClickData(clickArr);				
+				PopUpManager.removePopUp(this);
+				canvas.actionsCanvas.publishPic(null, null, "share");
+			}
+			
+			public function setPhoto(_photo:Photo):void{
+				photo=_photo; 
+				Thumb.source=_photo.getAlbumImage().returnImageSource();
+			}
+			
+			public function setCanvas(_canvas:EditorCanvas):void{
+				canvas=_canvas;
+			}
+			
+			public function onInit():void{
+				var f:DropShadowFilter = new DropShadowFilter(9,45,0,.5);
+				var myFilters:Array = new Array();
+				myFilters.push(f);
+				filters=myFilters;				
+			}
+		]]>		
+	</mx:Script>		
+</mx:TitleWindow>

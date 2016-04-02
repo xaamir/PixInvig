@@ -1,0 +1,1351 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:mx="http://www.adobe.com/2006/mxml"
+	 	xmlns:comps="comps.*"
+		x="0" y="0" clipContent="true" visible="true" alpha="1"
+		horizontalScrollPolicy="off" verticalScrollPolicy="off"
+		label="Crop"
+		creationComplete="
+				/* This handler is run before this Tab Navigator Component is ever displayed. */
+				imageCropInit();
+				"
+		show=" /* This handler is run when this Tab Navigator Component becomes visible. */
+				imageCropInitPart2(); /* Add keyboard event handler to the stage. */
+				showHandler(); /* Display Crop Effect on thumbnail image */
+			"
+		>
+<!-- The main app's settings for the above properties override the defaults above. -->
+
+<!-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+File Name: ImageCrop.mxml - Flex Component based on the Canvas
+Author   : Brian Barry
+Date     :6/6/13 Thursday
+
+This component demonstrates the following Filter Effect:
+1. Crop Effect - Allow user to adjust all dimensions of a square crop box 
+   indicated by dashed lines on the image. When the user is satisfied 
+   with the cropbox dimensions, the user can click on the Apply button
+   to crop the original thumbnail image. The original thumbnail image
+   won't be changed. Instead, a new bitmapdata image will be created and
+   displayed below the original thumbnail image showing the cropped image.
+
+// Version Changes:
+// - - - - - - - -
+// v1.0 - 6/6/13, Original version:
+//		- ImageCrop.mxml now has 1351 lines of code. That's 23 pages in this file.
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+Methods Defined:
+- - - - - - - -
+1.  imageCropInit()
+2.  imageCropInitPart2()
+3.  keyboardDownEventHandler()
+4.  keyboardUpEventHandler()
+5.  keyboardEventHandler()
+6.  genResetButtonMouseClickEvent()
+7.  showHandler()
+8.  resetCropBoxToDefault()
+9.  resetCropEffectAndDisplay()
+10. updateCropPreviewThumbnail()
+11. convertMouseXYToSelectedLine()
+12. adjustCropBoxDueToMouseMovement()
+13. onMouseDownCropPreview()
+14. onMouseOverCropPreview()
+15. onMouseUpCropPreview()
+16. onMouseOutCropPreview()
+
+- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -->
+
+	<mx:Script>
+		<![CDATA[
+
+		import mx.core.Application;
+		import mx.core.BitmapAsset;
+		import flash.filters.BlurFilter;
+		import flash.events.KeyboardEvent;
+		import actionObj.filters.CropEffect;
+		import actionObj.filters.AdjustColor;
+
+
+		// 500 x 0.75 = 375.0, 250 x 0.75 = 187.5
+		// 500 x 250 --> 375 x 187.5 
+		private const tn1ScaleFactor:Number = 0.75;
+		private const tn2ScaleFactor:Number = 0.75;
+		
+		private var tn1ImgWid:int = Application.application.imageControls
+									.imgWid * tn1ScaleFactor;
+		private var tn1ImgHt:int  = Application.application.imageControls
+									.imgHt * tn1ScaleFactor;
+
+		private var tn2ImgWid:int = Application.application.imageControls
+									.imgWid * tn2ScaleFactor;
+		private var tn2ImgHt:int  = Application.application.imageControls
+									.imgHt * tn2ScaleFactor;
+
+		[Bindable]
+		private var targ1ImgBD:BitmapData = new BitmapData( tn1ImgWid,tn1ImgHt, true,0x00000000 );
+		[Bindable]
+		private var targ2ImgBD:BitmapData = new BitmapData( tn2ImgWid,tn2ImgHt, true,0x00000000 );
+
+		private var targ1ImgBA:BitmapAsset = new BitmapAsset( targ1ImgBD );
+		private var targ2ImgBA:BitmapAsset = new BitmapAsset( targ2ImgBD );
+
+		private var cropPreview:CropEffect;
+
+		private var cropImageBD:BitmapData;
+
+		public static const DARKEN_FLAG_DEFAULT:Boolean = true;
+
+		// darkenLevel is used in an alpha channel to (partially) select pixels
+		// from the original image to mix with a completely black background image, 
+		// as a way to darken the original image (without using curves or polynomials).
+		// - 0x00 selects nothing of the pixel from orig image leaving only the black background
+		// - 0x40 selects part of the pixel (0x40==64) from orig image leaving a mix of
+		//   orig pixel and black pixel, but mostly uses the black pixel because
+		//   0x3C is < 50% (a 50% mix of orig pixel with black would be 255/2 = 127 or 0x7F).
+		// - 0xFF selects entire pixel from orig image leaving only the orig image.
+		public static const DARKEN_LEVEL_DEFAULT:int = CropEffect.DARKEN_LEVEL_DEFAULT; // 0x90; // 0x30 was too dark
+		// Range: 0 < N < 255. 0:fully black pixels, 64:darkened orig image (default), 255:orig image
+
+		private var darkenLevel:int  = DARKEN_LEVEL_DEFAULT; // 0x30 was too dark, 0x70 wasn't dark enough
+
+		private var matrix1:Matrix;
+		private var matrix2:Matrix;
+
+		private var workRect1:Rectangle;
+		private var workRect2:Rectangle;
+
+		public var cropPreview_defined:Boolean = false;
+
+		public var cropPreview_darkenFlag:Boolean = CropEffect.DARKEN_FLAG_DEFAULT;
+		public var cropPreview_darkenLevel:int    = CropEffect.DARKEN_LEVEL_DEFAULT;
+
+		private var mouseDown:Boolean = false;
+		private var ctrlKeyIsDown:Boolean = false;
+		private var ctrlKeyIsDownPrev:Boolean = false;
+		private var shiftKeyIsDown:Boolean = false;
+		private var shiftKeyIsDownPrev:Boolean = false;
+
+		private var focusMouseSaveX:int = 0;
+		private var focusSaveMaskScaleFactor:Number = 0;
+
+		private var cropShape:Shape = new Shape();
+
+		private var point0:Point = new Point( 0, 0 );
+
+		private var cropBoxColorFlg:Boolean = true;
+		private var cropBoxColorFlgCounter:int = 0;
+
+		private var cropBoxRect:Rectangle;
+		private var dashColorOne:uint = 0xFF000000; // black color for creating dashed line
+		private var dashColorTwo:uint = 0xFFFFFFFF; // white color for creating dashed line
+
+		private var mouseDownX:int = 0;
+		private var mouseDownY:int = 0;
+
+		private var mouseDownCropBoxRect:Rectangle;
+		private var mouseDownCropBoxX_rightEdge:int  = 0;
+		private var mouseDownCropBoxY_bottomEdge:int = 0;
+
+		private static const MOUSE_DOWN_SELECT_LINE_NONE:int = 0;
+
+		private static const MOUSE_DOWN_SELECT_TOP_LEFT_CORNER:int = 1;
+		private static const MOUSE_DOWN_SELECT_TOP_RIGHT_CORNER:int = 2;
+		private static const MOUSE_DOWN_SELECT_BOTTOM_RIGHT_CORNER:int = 3;
+		private static const MOUSE_DOWN_SELECT_BOTTOM_LEFT_CORNER:int = 4;
+
+		private static const MOUSE_DOWN_SELECT_TOP_LINE:int = 5;
+		private static const MOUSE_DOWN_SELECT_RIGHT_LINE:int = 6;
+		private static const MOUSE_DOWN_SELECT_BOTTOM_LINE:int = 7;
+		private static const MOUSE_DOWN_SELECT_LEFT_LINE:int = 8
+
+		private var mouseDownSelectLine:int = MOUSE_DOWN_SELECT_LINE_NONE;
+
+		private var xMarginPx:int = 4; // Pixel tolerance to left/right of vertical line to select it. 
+		private var yMarginPx:int = 4; // Pixel tolerance above/below horizontal line to select it. 
+
+		private static const CROPBOX_MIN_WIDTH:int = 6;
+		private static const CROPBOX_MIN_HEIGHT:int = 6;
+
+
+		// -----------------------------------------------------------------------
+		// This is the creationComplete() handler and it's run before 
+		// before this Tab Navigator Component is ever displayed.
+
+		public function imageCropInit():void
+		{
+//trace( "imageAdjust2Init(): " );
+			workRect1 = new Rectangle( 0, 0, tn1ImgWid, tn1ImgHt );
+			workRect2 = new Rectangle( 0, 0, tn2ImgWid, tn2ImgHt );
+
+			mouseDown          = false;
+			ctrlKeyIsDown      = false;
+			ctrlKeyIsDownPrev  = false;	
+			shiftKeyIsDown     = false;
+			shiftKeyIsDownPrev = false;	
+
+			// Scale the orig image down to a thumbnail image using
+			// a scale factor (display it if preview is selected).
+			matrix1 = new Matrix();
+			matrix1.scale( tn1ScaleFactor, tn1ScaleFactor );
+
+			matrix2 = new Matrix();
+			matrix2.scale( tn2ScaleFactor, tn2ScaleFactor );
+
+
+			//_____ Initialize Crop Effect parameters
+			cropImageBD = new BitmapData( targ1ImgBD.rect.width, 
+						  targ1ImgBD.rect.height, true, 0xFF000000 ); // black, opaque
+
+			previewCropCheckBox.selected     = true;
+
+			cropPreview_defined = false;
+
+			cropPreview = new CropEffect( targ1ImgBD );
+
+			cropPreview_darkenFlag = CropEffect.DARKEN_FLAG_DEFAULT;
+			cropPreview.setDarkenFlag( cropPreview_darkenFlag );
+
+			cropPreview_darkenLevel = CropEffect.DARKEN_LEVEL_DEFAULT;
+			cropPreview.setDarkenLevel( cropPreview_darkenLevel );
+
+			if( cropPreview_darkenFlag == true )
+				 {	cropDarkenCheckBox.selected = true;		}
+			else {	cropDarkenCheckBox.selected = false;	}
+
+			cropBoxRect = new Rectangle( 0, 0, 0, 0 );
+			mouseDownCropBoxRect = new Rectangle( 0, 0, 0, 0 );
+
+		} // END OF ... public function imageCropInit():void
+
+		// The 'stage' object is not available to a class until it has been added to
+		// the stage. Referencing 'stage' in imageCropInit() above causes this error:
+		// - TypeError: Error #1009: Cannot access a property or method of a null object reference.
+		// So we'll call part2 of initialization from this component's "show" handler,
+		// which is run when this Tab Navigator Component becomes visible.
+		public function imageCropInitPart2():void
+		{
+			// Add an event handler to this application's stage
+			// to catch and process all keystrokes by the user.
+			// Adding the event listener to the stage means
+			// that there will be no "component focus" issues.
+			// All key-down and key-up keystrokes will be caught.
+			stage.addEventListener( KeyboardEvent.KEY_DOWN, keyboardDownEventHandler );
+			stage.addEventListener( KeyboardEvent.KEY_UP,   keyboardUpEventHandler );
+		}
+
+		//----------------------------------------------------------------------
+		// Apparently, there's nothing in the event object that says whether
+		// the keyboard event was a Key Down or Key Up event. That's decided
+		// when you create an event listener. So we need these 2 extra methods
+		// to let the keyboardEventHandler() know which type key event it was.
+		private function keyboardDownEventHandler( event:KeyboardEvent ):void
+		{
+			var keyDown:Boolean = true;
+			keyboardEventHandler( keyDown, event );
+		}
+		private function keyboardUpEventHandler( event:KeyboardEvent ):void
+		{
+			var keyDown:Boolean = false;
+			keyboardEventHandler( keyDown, event );
+		}
+		private function keyboardEventHandler( keyDown:Boolean, event:KeyboardEvent ):void
+		{
+			// See this Adobe webpage for a full list of AS3 Keyboard Constants:
+			// http://help.adobe.com/en_US/FlashPlatform/reference/actionscript/3/flash/events/KeyboardEvent.html#!flash/ui/Keyboard.html
+			// More info here:
+			// http://help.adobe.com/en_US/ActionScript/3.0_ProgrammingAS3/WS5b3ccc516d4fbf351e63e3d118a9b90204-7d01.html
+			// http://help.adobe.com/en_US/FlashPlatform/reference/actionscript/3/flash/events/KeyboardEvent.html
+			// Keyboard.CONTROL   == 17  (Ctrl key)
+			// Keyboard.ALTERNATE == 18  (Alt key)
+			// Keyboard.SHIFT     == 16  (Shift key)
+			// Keyboard.ENTER     == 13  (Enter key)
+			// Keyboard.ESCAPE    == 27  (ESC key)
+			// Keyboard.F1        == 112 (F1 key)
+			// Keyboard.F2        == 113 (F2 key)
+			// Keyboard.SPACE     == 32  (Spacebar key)
+			// etc.
+
+			// Both keys can be down at the same time, but we'll assume they can't be,
+			// and just check for the Control key first, then the Shift key.
+			if( ( event.keyCode == Keyboard.CONTROL ) && ( keyDown == true ) )
+			{
+				ctrlKeyIsDown = true;
+				shiftKeyIsDown = false; // we're assuming that both keys can't be down.
+			}
+			else
+			if( ( event.keyCode == Keyboard.CONTROL ) && ( keyDown == false ) )
+			{
+				ctrlKeyIsDown = false;
+			}
+			else
+			if( ( event.keyCode == Keyboard.SHIFT ) && ( keyDown == true ) )
+			{
+				shiftKeyIsDown = true;
+				ctrlKeyIsDown = false; // we're assuming that both keys can't be down.
+			}
+			else
+			if( ( event.keyCode == Keyboard.SHIFT ) && ( keyDown == false ) )
+			{
+				shiftKeyIsDown = false;
+			}
+			else
+			if( ( event.keyCode == Keyboard.ESCAPE ) && ( keyDown == true ) )
+			{
+				// The ESC key has been pressed so generate a Mouse click Event
+				// for the either the Crop Effect Reset button or the Depth
+				// Effect Reset button to cause a reset of the settings for the
+				// corresponding effect based on the current mouse's Y position.
+				genResetButtonMouseClickEvent(); // generate Mouse click event for 1 of 2 Reset buttons
+			}
+
+		} // END OF ... private function keyboardEventHandler( keyDown:Boolean, event:KeyboardEvent ):void
+
+		//----------------------------------------------------------------------
+		private function genResetButtonMouseClickEvent():void
+		{
+			// The ESC key has been pressed so generate a Mouse click Event for
+			// the Crop Effect Reset button to cause a reset of the settings for
+			// the corresponding effect based on the current mouse's Y position.
+
+			var event_type:String = MouseEvent.CLICK;
+			var bubbles:Boolean = true;
+			var cancelable:Boolean = false;
+
+			// For more info on dispatching a mouse event:
+			// http://livedocs.adobe.com/flex/3/html/help.html?content=events_07.html
+			resetCropEffectBtn.dispatchEvent(
+				new MouseEvent( event_type, bubbles, cancelable ) );
+
+		} // END OF ... private function genResetButtonMouseClickEvent():void
+
+
+		//----------------------------------------------------------------------
+		// This method is called when this ImagesSummary.mxml component,
+		// which is a Tab in a TabNavigator becomes visible.
+		public function showHandler():void
+		{
+//trace( "showHandler(): " );
+			// We're using draw() below instead of copyPixels() because
+			// draw() supports scaling using a matrix, which we need here.
+			// (Note that draw() is apparently slower then copyPixels().) 
+			// For draw() to work though, all pixels in the destination 
+			// image must be set to transparent, otherwise any non-transparent
+			// pixels in the destination will be visible through any transparent 
+			// pixels in the source image. This is because draw() does not
+			// copy over transparent pixels.
+			targ1ImgBD.fillRect( workRect1, 0x00FFFFFF ); // fill with white transparent pixels
+
+			targ2ImgBD.fillRect( workRect2, 0x00FFFFFF ); // fill with white transparent pixels
+
+
+			// Draw the orig image into the local thumbnail image (smoothing=true)
+			// scaling it down using a matrix. Draw() only works with transparency
+			// if you've first filled the BitmapData object first with 
+			// all transparent pixels, otherwise, any opaque pixels in the 
+			// destination might be visible. This is because draw() doesn't
+			// copy over transparent pixels, so any opaque pixels in the 
+			// destination located where there are transparent pixels 
+			// in the source BitmapData will be visible in the result.
+			targ1ImgBD.draw( Application.application.imageControls
+							.targetImg, matrix1, null,null,null, true );
+
+			resetCropBoxToDefault( cropBoxRect );
+
+			// Display Crop Effect on thumbnail image (if preview is selected) 
+			updateCropPreviewThumbnail();
+
+			// Re-use existing BitmapAsset and just point to the updated BitmapData object.
+			targ1ImgBA.bitmapData = targ1ImgBD;
+			targ1ImgThumb.source  = targ1ImgBA;
+
+		} // END OF ... public function showHandler():void
+
+		//----------------------------------------------------------------------
+		private function resetCropBoxToDefault( cropBoxRect:Rectangle ):void
+		{
+			cropBoxRect.width  = targ1ImgBD.rect.width  
+								 * CropEffect.INITIAL_CROP_BOX_SCALE_FACTOR;
+			cropBoxRect.height = targ1ImgBD.rect.height 
+								 * CropEffect.INITIAL_CROP_BOX_SCALE_FACTOR;
+			// Make sure that the width,height values are integral Numbers (no fractions)
+			cropBoxRect.width  = Number( int( cropBoxRect.width ) );
+			cropBoxRect.height = Number( int( cropBoxRect.height ) );
+
+			// Center the cropbox on the working image.
+			cropBoxRect.x = (targ1ImgBD.rect.width  - cropBoxRect.width ) / 2.0;
+			cropBoxRect.y = (targ1ImgBD.rect.height - cropBoxRect.height) / 2.0;
+
+			// Make sure that the x,y values are integral Numbers (no fractions)
+			cropBoxRect.x = Number( int( cropBoxRect.x ) );
+			cropBoxRect.y = Number( int( cropBoxRect.y ) );
+
+		} // END OF ... private function resetCropBoxToDefault( cropBoxRect:Rectangle ):void
+
+		//----------------------------------------------------------------------
+		private function resetCropEffectAndDisplay():void 
+		{
+			mouseDown          = false;
+			ctrlKeyIsDown      = false;
+			shiftKeyIsDown     = false;
+			shiftKeyIsDownPrev = false;
+
+			previewCropCheckBox.selected = true;
+
+			cropPreview_defined = false;
+
+			cropPreview_darkenLevel = CropEffect.DARKEN_LEVEL_DEFAULT;
+			cropPreview.setDarkenLevel( cropPreview_darkenLevel );
+
+			applyCropEffectBtn.toolTip = 'Apply Crop Effect to Target Image';
+
+
+			targ1ImgBD = new BitmapData( tn1ImgWid,tn1ImgHt, true,0x00000000 );
+
+			// Draw the orig image into the local thumbnail image (smoothing=true)
+			// scaling it down using a matrix. Draw() only works with transparency
+			// if you've first filled the BitmapData object first with 
+			// all transparent pixels, otherwise, any opaque pixels in the 
+			// destination might be visible. This is because draw() doesn't
+			// copy over transparent pixels, so any opaque pixels in the 
+			// destination located where there are transparent pixels 
+			// in the source BitmapData will be visible in the result.
+			targ1ImgBD.draw( Application.application.imageControls
+							.targetImg, matrix1, null,null,null, true );
+
+			targ1ImgBA.bitmapData = targ1ImgBD;
+			targ1ImgThumb.source  = targ1ImgBA;
+
+			resetCropBoxToDefault( cropBoxRect );
+
+			/* Display Crop Effect on thumbnail image (if preview is selected) */
+			updateCropPreviewThumbnail();
+		
+		} // END OF ... private function resetCropEffectAndDisplay():void 
+
+		//----------------------------------------------------------------------
+		private function updateCropPreviewThumbnail():void 
+		{
+			var cropParmsStr:String;
+
+			// Display either the original image (preview is OFF), or
+			// display the original image with Crop Box displayed on image.
+			// Load the target image into the thumbnail bitmapdata object.
+			targ1ImgBD.fillRect( workRect1, 0x00000000 ); // fill with black transparent pixels
+
+			// Draw the current target image into this thumbnail image
+			// so we can apply the crop effect to it for previewing.
+			targ1ImgBD.draw( Application.application.imageControls.targetImg,
+							 matrix1, null,null,null, true );
+
+			if( previewCropCheckBox.selected == true )
+			{
+				// Draw the Cropbox onto the cropImageBD bitmapdata object,
+				// using targ1ImgBD as the background image (optionally darkened).
+				// drawCropBox() modifies the x,y values of cropBoxRect
+				// if their values might cause the cropbox to go off the image.
+				cropPreview.drawCropBox( cropImageBD, targ1ImgBD,
+										 cropBoxRect,
+										 dashColorOne, dashColorTwo );
+
+				targ1ImgBD.draw( cropImageBD, null, null,null,null, true );
+
+			} // END OF ... if( previewCropCheckBox.selected == true )
+
+			cropParmsStr = Sprintf( 
+				"X: %4.0f\nY: %4.0f\nWd: %5.2f%%\nHt: %5.2f%%", 
+				cropBoxRect.x, cropBoxRect.y,
+				100.0 * (cropBoxRect.width  / targ1ImgBD.rect.width),
+				100.0 * (cropBoxRect.height / targ1ImgBD.rect.height) );
+
+			cropEffectParmsTextArea.text = cropParmsStr;
+
+		} // END OF ... private function updateCropPreviewThumbnail():void
+
+
+		//----------------------------------------------------------------------
+		// Determine which line (left, top, right, bottom) the mouse is "on",
+		// or which line intersection (top-left, top-right, bottom-right, bottom-left)
+		// the mouse is "on". If the mouse isn't within xMarginPx or yMarginPx
+		// of these lines, then return MOUSE_DOWN_SELECT_LINE_NONE.
+		private function convertMouseXYToSelectedLine( mouseDownX:int, mouseDownY:int,
+													   xMarginPx:int, yMarginPx:int,
+													   cropBoxRect:Rectangle):int
+		{
+			var mouseDownSelectLine:int = MOUSE_DOWN_SELECT_LINE_NONE;
+
+			//_____ Check for mouse in the TOP LEFT CORNER to possibly reposition
+			//		both the Left Line and the Top Line.
+			if( ( Math.abs( mouseDownX - cropBoxRect.x ) < xMarginPx ) // Is mouse within +- 4px horizontally of left edge of cropbox?
+			 && ( mouseDownY > (cropBoxRect.y-yMarginPx) ) // Is mouse below the (top of the cropbox - 4px, going up) ?
+			 && ( mouseDownY < (cropBoxRect.y+cropBoxRect.height+yMarginPx) ) // Is mouse above the (bottom of the cropbox + 4px, going down) ?
+ 
+			 && ( Math.abs( mouseDownY - cropBoxRect.y ) < yMarginPx ) // Is mouse within +- 4px horizontally of top edge of cropbox?
+			 && ( mouseDownX > (cropBoxRect.x-xMarginPx) ) // Is mouse to right of the (left edge of the cropbox - 4px, going to left) ?
+			 && ( mouseDownX < (cropBoxRect.x+cropBoxRect.width+xMarginPx) ) ) // Is mouse to left of the (right edge of the cropbox + 4px, going to right) ?
+			{
+				// The user clicked within 10 pixels of the top left corner of the cropbox.
+				mouseDownSelectLine = MOUSE_DOWN_SELECT_TOP_LEFT_CORNER;
+				// trace( "Yes. Top Left Corner. Left Line and Top line.");
+			}
+			else
+			//_____ Check for mouse in the TOP RIGHT CORNER to possibly reposition
+			//		both the Top Line and the Right Line.
+			if( ( Math.abs( mouseDownX - (cropBoxRect.x + cropBoxRect.width) ) < xMarginPx ) // Is mouse within +- 6px horizontally of right edge of cropbox?
+			 && ( mouseDownY > (cropBoxRect.y-yMarginPx) ) // Is mouse below the (top of the cropbox - 6px, going up) ?
+			 && ( mouseDownY < (cropBoxRect.y+cropBoxRect.height+yMarginPx) ) // Is mouse above the (bottom of the cropbox + 6px, going down) ?
+			
+			 && ( Math.abs( mouseDownY - cropBoxRect.y ) < yMarginPx ) // Is mouse within +- 4px horizontally of top edge of cropbox?
+			 && ( mouseDownX > (cropBoxRect.x-xMarginPx) ) // Is mouse to right of the (left edge of the cropbox - 4px, going to left) ?
+			 && ( mouseDownX < (cropBoxRect.x+cropBoxRect.width+xMarginPx) ) ) // Is mouse to left of the (right edge of the cropbox + 4px, going to right) ?
+			{
+				// The user clicked within 10 pixels of the top right corner of the cropbox.
+				mouseDownSelectLine = MOUSE_DOWN_SELECT_TOP_RIGHT_CORNER;
+				// trace( "Yes. Top Right Corner. Top Line and Right line.");
+			}
+			else
+			//_____ Check for mouse in the BOTTOM RIGHT CORNER to possibly reposition
+			//		both the Bottom Line and the Right Line.
+			if( ( Math.abs( mouseDownY - (cropBoxRect.y + cropBoxRect.height) ) < yMarginPx ) // Is mouse within +- 4px horizontally of bottom edge of cropbox?
+			 && ( mouseDownX > (cropBoxRect.x-xMarginPx) ) // Is mouse to right of the (left edge of the cropbox - 4px, going to left) ?
+			 && ( mouseDownX < (cropBoxRect.x+cropBoxRect.width+xMarginPx) ) // Is mouse to left of the (right edge of the cropbox + 4px, going to right) ?
+			
+			 && ( Math.abs( mouseDownX - (cropBoxRect.x + cropBoxRect.width) ) < xMarginPx ) // Is mouse within +- 6px horizontally of right edge of cropbox?
+			 && ( mouseDownY > (cropBoxRect.y-yMarginPx) ) // Is mouse below the (top of the cropbox - 6px, going up) ?
+			 && ( mouseDownY < (cropBoxRect.y+cropBoxRect.height+yMarginPx) ) ) // Is mouse above the (bottom of the cropbox + 6px, going down) ?
+			{
+				// The user clicked within 10 pixels of the bottom right corner of the cropbox.
+				mouseDownSelectLine = MOUSE_DOWN_SELECT_BOTTOM_RIGHT_CORNER;
+				// trace( "Yes. Bottom Right Corner. Bottom Line and Right line.");
+			}
+			else
+			//_____ Check for mouse in the BOTTOM LEFT CORNER to possibly reposition
+			//		both the Bottom Line and the Left Line.
+			if( ( Math.abs( mouseDownY - (cropBoxRect.y + cropBoxRect.height) ) < yMarginPx ) // Is mouse within +- 4px horizontally of bottom edge of cropbox?
+			 && ( mouseDownX > (cropBoxRect.x-xMarginPx) ) // Is mouse to right of the (left edge of the cropbox - 4px, going to left) ?
+			 && ( mouseDownX < (cropBoxRect.x+cropBoxRect.width+xMarginPx) ) // Is mouse to left of the (right edge of the cropbox + 4px, going to right) ?
+			
+			 && ( Math.abs( mouseDownX - cropBoxRect.x ) < xMarginPx ) // Is mouse within +- 4px horizontally of left edge of cropbox?
+			 && ( mouseDownY > (cropBoxRect.y-yMarginPx) ) // Is mouse below the (top of the cropbox - 4px, going up) ?
+			 && ( mouseDownY < (cropBoxRect.y+cropBoxRect.height+yMarginPx) ) ) // Is mouse above the (bottom of the cropbox + 4px, going down) ?
+			{
+				// The user clicked within 10 pixels of the bottom left corner of the cropbox.
+				mouseDownSelectLine = MOUSE_DOWN_SELECT_BOTTOM_LEFT_CORNER;
+				// trace( "Yes. Bottom Left Corner. Bottom Line and Left line.");
+			}
+			
+			else
+			
+			if( ( Math.abs( mouseDownX - cropBoxRect.x ) < xMarginPx ) // Is mouse within +- 4px horizontally of left edge of cropbox?
+			 && ( mouseDownY > (cropBoxRect.y-yMarginPx) ) // Is mouse below the (top of the cropbox - 4px, going up) ?
+			 && ( mouseDownY < (cropBoxRect.y+cropBoxRect.height+yMarginPx) ) ) // Is mouse above the (bottom of the cropbox + 4px, going down) ?
+			{
+				// The user clicked within 10 pixels of the left edge of the cropbox.
+				mouseDownSelectLine = MOUSE_DOWN_SELECT_LEFT_LINE;
+				// trace( "Yes. Left Line.");
+			}
+			else
+			//_____ Check for mouse on the TOP LINE to possibly reposition it.
+			if( ( Math.abs( mouseDownY - cropBoxRect.y ) < yMarginPx ) // Is mouse within +- 4px horizontally of top edge of cropbox?
+			 && ( mouseDownX > (cropBoxRect.x-xMarginPx) ) // Is mouse to right of the (left edge of the cropbox - 4px, going to left) ?
+			 && ( mouseDownX < (cropBoxRect.x+cropBoxRect.width+xMarginPx) ) ) // Is mouse to left of the (right edge of the cropbox + 4px, going to right) ?
+			{
+				// The user clicked within 10 pixels of the left edge of the cropbox.
+				mouseDownSelectLine = MOUSE_DOWN_SELECT_TOP_LINE;
+				// trace( "Yes. Top Line.");
+			}
+			else
+			//_____ Check for mouse on the RIGHT LINE to possibly reposition it.
+			if( ( Math.abs( mouseDownX - (cropBoxRect.x + cropBoxRect.width) ) < xMarginPx ) // Is mouse within +- 6px horizontally of right edge of cropbox?
+			 && ( mouseDownY > (cropBoxRect.y-yMarginPx) ) // Is mouse below the (top of the cropbox - 6px, going up) ?
+			 && ( mouseDownY < (cropBoxRect.y+cropBoxRect.height+yMarginPx) ) ) // Is mouse above the (bottom of the cropbox + 6px, going down) ?
+			{
+				// The user clicked within 10 pixels of the right edge of the cropbox.
+				mouseDownSelectLine = MOUSE_DOWN_SELECT_RIGHT_LINE;
+				// trace( "Yes. Right Line.");
+			}
+			else
+			//_____ Check for mouse on the BOTTOM LINE to possibly reposition it.
+			if( ( Math.abs( mouseDownY - (cropBoxRect.y + cropBoxRect.height) ) < yMarginPx ) // Is mouse within +- 4px horizontally of bottom edge of cropbox?
+			 && ( mouseDownX > (cropBoxRect.x-xMarginPx) ) // Is mouse to right of the (left edge of the cropbox - 4px, going to left) ?
+			 && ( mouseDownX < (cropBoxRect.x+cropBoxRect.width+xMarginPx) ) ) // Is mouse to left of the (right edge of the cropbox + 4px, going to right) ?
+			{
+				// The user clicked within 10 pixels of the left edge of the cropbox.
+				mouseDownSelectLine = MOUSE_DOWN_SELECT_BOTTOM_LINE;
+				// trace( "Yes. Bottom Line.");
+			}
+			return( mouseDownSelectLine );
+
+		} // END OF ... private function convertMouseXYToSelectedLine( mouseDownX:int, mouseDownY:int,
+
+
+		//----------------------------------------------------------------------
+		private function adjustCropBoxDueToMouseMovement( cropBoxRect:Rectangle,
+									mouseDownCropBoxRect:Rectangle, 
+									mouseDownCropBoxX_rightEdge:int,
+									mouseDownCropBoxY_bottomEdge:int,
+									mouseDownSelectLine:int,
+									mouseMovementX:int, mouseMovementY:int,
+									cropBoxMinWidth:int, cropBoxMinHeight:int ):void
+		{
+			var newWidthPx:int;
+			var newHeightPx:int;
+
+				switch( mouseDownSelectLine )
+				{
+					case MOUSE_DOWN_SELECT_LINE_NONE:
+						// Move the entire cropbox across the image, 
+						// without changing its width or height.
+						// Make sure that the x,y values are integral Numbers (no fractions)
+						// Reposition the top left corner (x,y) position of the cropbox to
+						// reflect how much the user has moved the mouse since clicking down.
+						cropBoxRect.x = Number( mouseDownCropBoxRect.x + mouseMovementX );
+						cropBoxRect.y = Number( mouseDownCropBoxRect.y + mouseMovementY );
+						break;
+
+				case MOUSE_DOWN_SELECT_TOP_LEFT_CORNER:
+						// First, handle moving the Left Line.
+						// User is moving left edge of cropbox to change the width.
+						// We must keep the right edge stationary, varying only 
+						// the X position of the left edge. So we will compute
+						// the new X position of the left edge by subtracting 
+						// the varying width value from the right edge's X position.
+						// This will keep the right edge stationary while 
+						// moving only the left edge.
+						newWidthPx = mouseDownCropBoxRect.width - mouseMovementX;
+						if( newWidthPx >= cropBoxMinWidth )
+						{
+							// Cropbox >= min width.
+							// Reposition left edge, keeping right edge stationary.
+							cropBoxRect.x = mouseDownCropBoxX_rightEdge - newWidthPx;
+							cropBoxRect.width = newWidthPx;
+						}
+						else
+						{
+							// Cropbox < min width.
+							// Set cropbox width to the minimum width, then recalc
+							// the X position of the left edge to be the minimum
+							// width pixels to the left of the right edge.
+							newWidthPx = cropBoxMinWidth;
+							cropBoxRect.width = newWidthPx;
+							// Recalc x position of cropbox shifted right, at minimum width.
+							cropBoxRect.x = mouseDownCropBoxX_rightEdge - newWidthPx;
+						}
+
+						// Second, handle moving the Top Line.
+						// User is moving top edge of cropbox to change the height.
+						// We must keep the bottom edge stationary, varying only 
+						// the Y position of the top edge. So we will compute
+						// the new Y position of the top edge by subtracting 
+						// the varying width value from the bottom edge's Y position.
+						// This will keep the bottom edge stationary while 
+						// moving only the top edge.
+						newHeightPx = mouseDownCropBoxRect.height - mouseMovementY;
+						if( newHeightPx >= cropBoxMinHeight )
+						{
+							// Cropbox >= min height.
+							// Reposition top edge, keeping bottom edge stationary.
+							cropBoxRect.y = mouseDownCropBoxY_bottomEdge - newHeightPx;
+							cropBoxRect.height = newHeightPx;
+						}
+						else
+						{
+							// Cropbox < min height.
+							// Set cropbox width to the minimum height, then recalc
+							// the Y position of the top edge to be the minimum
+							// height pixels above the bottom edge.
+							newHeightPx = cropBoxMinHeight;
+							cropBoxRect.height = newHeightPx;
+							// Recalc y position of cropbox shifted down, at minimum height.
+							cropBoxRect.y = mouseDownCropBoxY_bottomEdge - newHeightPx;
+						}
+						break;
+
+				case MOUSE_DOWN_SELECT_TOP_RIGHT_CORNER:
+						// First, handle moving the Top Line.
+						// User is moving top edge of cropbox to change the height.
+						// We must keep the bottom edge stationary, varying only 
+						// the Y position of the top edge. So we will compute
+						// the new Y position of the top edge by subtracting 
+						// the varying width value from the bottom edge's Y position.
+						// This will keep the bottom edge stationary while 
+						// moving only the top edge.
+						newHeightPx = mouseDownCropBoxRect.height - mouseMovementY;
+						if( newHeightPx >= cropBoxMinHeight )
+						{
+							// Cropbox >= min height.
+							// Reposition top edge, keeping bottom edge stationary.
+							cropBoxRect.y = mouseDownCropBoxY_bottomEdge - newHeightPx;
+							cropBoxRect.height = newHeightPx;
+						}
+						else
+						{
+							// Cropbox < min height.
+							// Set cropbox width to the minimum height, then recalc
+							// the Y position of the top edge to be the minimum
+							// height pixels above the bottom edge.
+							newHeightPx = cropBoxMinHeight;
+							cropBoxRect.height = newHeightPx;
+							// Recalc y position of cropbox shifted down, at minimum height.
+							cropBoxRect.y = mouseDownCropBoxY_bottomEdge - newHeightPx;
+						}
+
+						// Second, handle moving the Right Line.
+						// User is moving right edge of cropbox to change the width.
+						// We must keep the left edge stationary, varying only 
+						// the X position of the right edge. So we will compute
+						// the new X position of the right edge by adding the varying 
+						// width value to the left edge's X position. This will keep 
+						// the left edge stationary while moving only the right edge.
+						// Since the right edge is defined by the left edge X position
+						// plus the width, all we have to do is change the cropbox width.
+						newWidthPx = mouseDownCropBoxRect.width + mouseMovementX;
+						if( newWidthPx >= cropBoxMinWidth )
+						{
+							// Cropbox >= min width.
+							// Reposition right edge, keeping left edge stationary.
+							cropBoxRect.width = newWidthPx;
+						}
+						else
+						{
+							// Cropbox < min width.
+							// Set cropbox width to the minimum width, then recalc
+							// the X position of the right edge to be the minimum
+							// width pixels added to the left edge.
+							newWidthPx = cropBoxMinWidth;
+							cropBoxRect.width = newWidthPx;
+						}
+						break;
+
+				case MOUSE_DOWN_SELECT_BOTTOM_RIGHT_CORNER:
+						// First, handle moving the Bottom Line.
+						// User is moving bottom edge of cropbox to change the height.
+						// We must keep the top edge stationary, varying only 
+						// the Y position of the bottom edge. So we will compute
+						// the new Y position of the bottom edge by adding the varying 
+						// width value to the top edge's Y position. This will keep 
+						// the top edge stationary while moving only the bottom edge.
+						// Since the bottom edge is defined by the top edge Y position
+						// plus the height, all we have to do is change the cropbox height.
+						newHeightPx = mouseDownCropBoxRect.height + mouseMovementY;
+						if( newHeightPx >= cropBoxMinHeight )
+						{
+							// Cropbox >= min height.
+							// Reposition bottom edge, keeping top edge stationary.
+							cropBoxRect.height = newHeightPx;
+						}
+						else
+						{
+							// Cropbox < min height.
+							// Set cropbox height to the minimum height, then recalc
+							// the Y position of the bottom edge to be the minimum
+							// height pixels added to the top edge.
+							newHeightPx = cropBoxMinHeight;
+							cropBoxRect.height = newHeightPx;
+						}
+
+						// Second, handle moving the Right Line.
+						// User is moving right edge of cropbox to change the width.
+						// We must keep the left edge stationary, varying only 
+						// the X position of the right edge. So we will compute
+						// the new X position of the right edge by adding the varying 
+						// width value to the left edge's X position. This will keep 
+						// the left edge stationary while moving only the right edge.
+						// Since the right edge is defined by the left edge X position
+						// plus the width, all we have to do is change the cropbox width.
+						newWidthPx = mouseDownCropBoxRect.width + mouseMovementX;
+						if( newWidthPx >= cropBoxMinWidth )
+						{
+							// Cropbox >= min width.
+							// Reposition right edge, keeping left edge stationary.
+							cropBoxRect.width = newWidthPx;
+						}
+						else
+						{
+							// Cropbox < min width.
+							// Set cropbox width to the minimum width, then recalc
+							// the X position of the right edge to be the minimum
+							// width pixels added to the left edge.
+							newWidthPx = cropBoxMinWidth;
+							cropBoxRect.width = newWidthPx;
+						}
+						break;
+
+					case MOUSE_DOWN_SELECT_BOTTOM_LEFT_CORNER:
+						// First, handle moving the Bottom Line.
+						// User is moving bottom edge of cropbox to change the height.
+						// We must keep the top edge stationary, varying only 
+						// the Y position of the bottom edge. So we will compute
+						// the new Y position of the bottom edge by adding the varying 
+						// width value to the top edge's Y position. This will keep 
+						// the top edge stationary while moving only the bottom edge.
+						// Since the bottom edge is defined by the top edge Y position
+						// plus the height, all we have to do is change the cropbox height.
+						newHeightPx = mouseDownCropBoxRect.height + mouseMovementY;
+						if( newHeightPx >= cropBoxMinHeight )
+						{
+							// Cropbox >= min height.
+							// Reposition bottom edge, keeping top edge stationary.
+							cropBoxRect.height = newHeightPx;
+						}
+						else
+						{
+							// Cropbox < min height.
+							// Set cropbox height to the minimum height, then recalc
+							// the Y position of the bottom edge to be the minimum
+							// height pixels added to the top edge.
+							newHeightPx = cropBoxMinHeight;
+							cropBoxRect.height = newHeightPx;
+						}
+
+						// Second, handle moving the Left Line.
+						// User is moving left edge of cropbox to change the width.
+						// We must keep the right edge stationary, varying only 
+						// the X position of the left edge. So we will compute
+						// the new X position of the left edge by subtracting 
+						// the varying width value from the right edge's X position.
+						// This will keep the right edge stationary while 
+						// moving only the left edge.
+						newWidthPx = mouseDownCropBoxRect.width - mouseMovementX;
+						if( newWidthPx >= cropBoxMinWidth )
+						{
+							// Cropbox >= min width.
+							// Reposition left edge, keeping right edge stationary.
+							cropBoxRect.x = mouseDownCropBoxX_rightEdge - newWidthPx;
+							cropBoxRect.width = newWidthPx;
+						}
+						else
+						{
+							// Cropbox < min width.
+							// Set cropbox width to the minimum width, then recalc
+							// the X position of the left edge to be the minimum
+							// width pixels to the left of the right edge.
+							newWidthPx = cropBoxMinWidth;
+							cropBoxRect.width = newWidthPx;
+							// Recalc x position of cropbox shifted right, at minimum width.
+							cropBoxRect.x = mouseDownCropBoxX_rightEdge - newWidthPx;
+						}
+						break;
+
+
+					case MOUSE_DOWN_SELECT_LEFT_LINE:
+						// User is moving left edge of cropbox to change the width.
+						// We must keep the right edge stationary, varying only 
+						// the X position of the left edge. So we will compute
+						// the new X position of the left edge by subtracting 
+						// the varying width value from the right edge's X position.
+						// This will keep the right edge stationary while 
+						// moving only the left edge.
+						newWidthPx = mouseDownCropBoxRect.width - mouseMovementX;
+						if( newWidthPx >= cropBoxMinWidth )
+						{
+							// Cropbox >= min width.
+							// Reposition left edge, keeping right edge stationary.
+							cropBoxRect.x = mouseDownCropBoxX_rightEdge - newWidthPx;
+							cropBoxRect.width = newWidthPx;
+						}
+						else
+						{
+							// Cropbox < min width.
+							// Set cropbox width to the minimum width, then recalc
+							// the X position of the left edge to be the minimum
+							// width pixels to the left of the right edge.
+							newWidthPx = cropBoxMinWidth;
+							cropBoxRect.width = newWidthPx;
+							// Recalc x position of cropbox shifted right, at minimum width.
+							cropBoxRect.x = mouseDownCropBoxX_rightEdge - newWidthPx;
+						}
+						break;
+
+					case MOUSE_DOWN_SELECT_TOP_LINE:
+						// User is moving top edge of cropbox to change the height.
+						// We must keep the bottom edge stationary, varying only 
+						// the Y position of the top edge. So we will compute
+						// the new Y position of the top edge by subtracting 
+						// the varying width value from the bottom edge's Y position.
+						// This will keep the bottom edge stationary while 
+						// moving only the top edge.
+						newHeightPx = mouseDownCropBoxRect.height - mouseMovementY;
+						if( newHeightPx >= cropBoxMinHeight )
+						{
+							// Cropbox >= min height.
+							// Reposition top edge, keeping bottom edge stationary.
+							cropBoxRect.y = mouseDownCropBoxY_bottomEdge - newHeightPx;
+							cropBoxRect.height = newHeightPx;
+						}
+						else
+						{
+							// Cropbox < min height.
+							// Set cropbox width to the minimum height, then recalc
+							// the Y position of the top edge to be the minimum
+							// height pixels above the bottom edge.
+							newHeightPx = cropBoxMinHeight;
+							cropBoxRect.height = newHeightPx;
+							// Recalc y position of cropbox shifted down, at minimum height.
+							cropBoxRect.y = mouseDownCropBoxY_bottomEdge - newHeightPx;
+						}
+						break;
+
+					case MOUSE_DOWN_SELECT_RIGHT_LINE:
+						// User is moving right edge of cropbox to change the width.
+						// We must keep the left edge stationary, varying only 
+						// the X position of the right edge. So we will compute
+						// the new X position of the right edge by adding the varying 
+						// width value to the left edge's X position. This will keep 
+						// the left edge stationary while moving only the right edge.
+						// Since the right edge is defined by the left edge X position
+						// plus the width, all we have to do is change the cropbox width.
+						newWidthPx = mouseDownCropBoxRect.width + mouseMovementX;
+						if( newWidthPx >= cropBoxMinWidth )
+						{
+							// Cropbox >= min width.
+							// Reposition right edge, keeping left edge stationary.
+							cropBoxRect.width = newWidthPx;
+						}
+						else
+						{
+							// Cropbox < min width.
+							// Set cropbox width to the minimum width, then recalc
+							// the X position of the right edge to be the minimum
+							// width pixels added to the left edge.
+							newWidthPx = cropBoxMinWidth;
+							cropBoxRect.width = newWidthPx;
+						}
+						break;
+
+					case MOUSE_DOWN_SELECT_BOTTOM_LINE:
+						// User is moving bottom edge of cropbox to change the height.
+						// We must keep the top edge stationary, varying only 
+						// the Y position of the bottom edge. So we will compute
+						// the new Y position of the bottom edge by adding the varying 
+						// width value to the top edge's Y position. This will keep 
+						// the top edge stationary while moving only the bottom edge.
+						// Since the bottom edge is defined by the top edge Y position
+						// plus the height, all we have to do is change the cropbox height.
+						newHeightPx = mouseDownCropBoxRect.height + mouseMovementY;
+						if( newHeightPx >= cropBoxMinHeight )
+						{
+							// Cropbox >= min height.
+							// Reposition bottom edge, keeping top edge stationary.
+							cropBoxRect.height = newHeightPx;
+						}
+						else
+						{
+							// Cropbox < min height.
+							// Set cropbox height to the minimum height, then recalc
+							// the Y position of the bottom edge to be the minimum
+							// height pixels added to the top edge.
+							newHeightPx = cropBoxMinHeight;
+							cropBoxRect.height = newHeightPx;
+						}
+						break;
+				}
+
+		} // END OF ... private function adjustCropBoxDueToMouseMovement( cropBoxRect:Rectangle,
+
+
+		//----------------------------------------------------------------------
+		// Mouse Methods:  (for use with the CropEffect thumbnail image)
+		// 1. onMouseDownCropPreview
+		// 2. onMouseOverCropPreview
+		// 3. onMouseUpCropPreview
+		// 4. onMouseOutCropPreview
+		//----------------------------------------------------------------------
+		private function onMouseDownCropPreview(event:MouseEvent):void 
+		{
+			var graphStatsStr:String;
+			var mouseX:int;
+			var mouseY:int;
+			var graphX:int;
+			var graphY:int;
+
+			mouseDown = true;
+
+			// mouseX and mouseY vary from 1..N
+			mouseX = event.localX;
+			mouseY = event.localY;
+
+			// graphX and graphY vary from 0..N-1. We subtract 1 to use as index into array if needed.
+			graphX = mouseX - 1;
+			graphY = mouseY - 1;
+
+			// Remember where the user clicked the mouse down, for dragging/moving the crop box.
+			mouseDownX = graphX;
+			mouseDownY = graphY;
+
+			//_____ Check for mouse on the LEFT LINE to possibly reposition it.
+			// trace( "cropBoxRect.x: " + cropBoxRect.x + ", cropBoxRect.y: " + cropBoxRect.y );
+
+			mouseDownSelectLine = MOUSE_DOWN_SELECT_LINE_NONE;
+
+			// Determine which line (left, top, right, bottom) the mouse is "on",
+			// or which line intersection (top-left, top-right, bottom-right, bottom-left)
+			// the mouse is "on". If the mouse isn't within xMarginPx or yMarginPx
+			// of these lines, then return MOUSE_DOWN_SELECT_LINE_NONE.
+			mouseDownSelectLine = convertMouseXYToSelectedLine( mouseDownX, mouseDownY,
+												  xMarginPx, yMarginPx, cropBoxRect );
+
+			// The Input/Output values displayed show the mouse position
+			// in the graph coordinates (Y ==0 is at bottom of graph area).
+			graphStatsStr  = Sprintf( "X: %03d\n", graphX );
+			graphStatsStr += Sprintf( "Y: %03d\n", graphY );
+			mouseStatsTextArea1.text = graphStatsStr;
+
+			cropImageBD.fillRect( targ1ImgBD.rect, 0xFF000000 ); // fill with black opaque pixels
+
+			// Draw the current target image into this thumbnail image
+			// so we can apply the crop effect to it for previewing.
+			targ1ImgBD.draw( Application.application.imageControls.targetImg,
+							 matrix1, null,null,null, true );
+
+
+			// Remember the current cropbox's settings from which to make
+			// cropbox adjustments if the user moves the mouse while it's down.
+			mouseDownCropBoxRect.x = cropBoxRect.x;
+			mouseDownCropBoxRect.y = cropBoxRect.y;
+			mouseDownCropBoxRect.width  = cropBoxRect.width;
+			mouseDownCropBoxRect.height = cropBoxRect.height;
+
+			mouseDownCropBoxX_rightEdge  = cropBoxRect.x + cropBoxRect.width;
+			mouseDownCropBoxY_bottomEdge = cropBoxRect.y + cropBoxRect.height;
+
+			// Display Crop Effect or just the mask on thumbnail image (if preview selected)
+			updateCropPreviewThumbnail();
+
+		} // END OF ... private function onMouseDownCropPreview(event:MouseEvent):void 
+
+
+		//----------------------------------------------------------------------
+		private function onMouseOverCropPreview(event:MouseEvent):void 
+		{
+			var graphStatsStr:String;
+			var mouseX:int;
+			var mouseY:int;
+			var graphX:int;
+			var graphY:int;
+
+			var mouseMovementX:int;
+			var mouseMovementY:int;
+
+			var diffX:Number;
+			var distX:Number;
+			var focusParmsStr:String;
+
+			// mouseX and mouseY vary from 1..256
+			mouseX = event.localX;
+			mouseY = event.localY;
+
+			// graphX and graphY vary from 0..255. We subtract 1 to use as index into array.
+			graphX = mouseX - 1;
+			graphY = mouseY - 1;
+
+			// The Input/Output values displayed show the mouse position
+			// in the graph coordinates (Y ==0 is at bottom of graph area).
+			graphStatsStr  = Sprintf( "X: %03d\n", graphX );
+			graphStatsStr += Sprintf( "Y: %03d\n", graphY );
+			mouseStatsTextArea1.text = graphStatsStr;
+
+
+			// Only move the Crop Effect around in the thumbnail image
+			// if the mouse is still "down".
+			if( mouseDown == true )
+			{
+				cropImageBD.fillRect( targ1ImgBD.rect, 0xFF000000 ); // fill with black opaque pixels
+
+				// Draw the current target image into this thumbnail image
+				// so we can apply the crop effect to it for previewing.
+				targ1ImgBD.draw( Application.application.imageControls.targetImg,
+								 matrix1, null,null,null, true );
+
+				// Only swap the crop box dash colors on every 2nd mouse over event.
+				// Each dash is actually made up of a black dash following by 
+				// a white dash (or vice versa).
+				if( ++cropBoxColorFlgCounter == 2 )
+				{
+					cropBoxColorFlgCounter = 0;
+					if( cropBoxColorFlg == true )
+					{
+						dashColorOne = 0xFF000000; // opaque black
+						dashColorTwo = 0xFFFFFFFF; // opaque white
+						cropBoxColorFlg = false;
+					}
+					else
+					{
+						dashColorOne = 0xFFFFFFFF; // opaque white
+						dashColorTwo = 0xFF000000; // opaque black
+						cropBoxColorFlg = true;
+					}
+				}
+
+				// This will drag the cropbox around on the image as the mouse moves.
+				mouseMovementX = graphX - mouseDownX;
+				mouseMovementY = graphY - mouseDownY;
+
+				adjustCropBoxDueToMouseMovement( cropBoxRect, mouseDownCropBoxRect, 
+							mouseDownCropBoxX_rightEdge, mouseDownCropBoxY_bottomEdge,
+							mouseDownSelectLine,
+							mouseMovementX, mouseMovementY,
+							CROPBOX_MIN_WIDTH, CROPBOX_MIN_HEIGHT );
+
+				// Display Crop Effect or just the mask on thumbnail image (if preview selected)
+				updateCropPreviewThumbnail();
+
+			} // END OF ... if( mouseDown == true )
+
+			ctrlKeyIsDownPrev  = ctrlKeyIsDown;
+			shiftKeyIsDownPrev = shiftKeyIsDown;
+
+		} // END OF ... private function onMouseOverCropPreview(event:MouseEvent):void
+
+
+		//----------------------------------------------------------------------
+		private function onMouseUpCropPreview(event:MouseEvent):void 
+		{
+			var graphStatsStr:String;
+			var mouseX:int;
+			var mouseY:int;
+			var graphX:int;
+			var graphY:int;
+
+			mouseDown          = false;
+			ctrlKeyIsDown      = false;
+			ctrlKeyIsDownPrev  = false;
+			shiftKeyIsDown     = false;
+			shiftKeyIsDownPrev = false;
+
+			// Reset the Mouse Down cropbox values.
+			mouseDownX = 0;
+			mouseDownY = 0;
+
+			mouseDownCropBoxRect.x = 0;
+			mouseDownCropBoxRect.y = 0;
+			mouseDownCropBoxRect.width  = 0;
+			mouseDownCropBoxRect.height = 0;
+			mouseDownCropBoxX_rightEdge  = 0;
+			mouseDownCropBoxY_bottomEdge = 0;
+
+			// mouseX and mouseY vary from 1..256
+			mouseX = event.localX;
+			mouseY = (tn1ImgHt - event.localY ); // convert to graph coordinates where Y=0 is at bottom
+
+			// graphX and graphY vary from 0..255. We subtract 1 to use as index into array.
+			graphX = mouseX - 1;
+			graphY = mouseY - 1;
+
+
+			// The Input/Output values displayed show the mouse position
+			// in the graph coordinates (Y ==0 is at bottom of graph area).
+			graphStatsStr  = Sprintf( "X: %03d\n", graphX );
+			graphStatsStr += Sprintf( "Y: %03d\n", graphY );
+			mouseStatsTextArea1.text = graphStatsStr;
+
+		} // END OF ... private function onMouseUpCropPreview(event:MouseEvent):void
+
+		//----------------------------------------------------------------------
+		private function onMouseOutCropPreview(event:MouseEvent):void 
+		{
+			// By ignoring this Mouse Out event, this permits the user to move
+			// the mouse off the image, keeping the mouse down, and then move the
+			// mouse back onto the image and the mask move operation will continue
+			// where the user left off when moving the mouse off the image.
+			// As an added bonus, if the user lifts up on the mouse button while 
+			// the mouse is off the image, that event isn't detected, so when 
+			// the user moves the mouse back onto the image with the mouse button 
+			// still up, the crop move operation will still continue, even though 
+			// the mouse is now up. This is a little bit inconsistent, it's worthwhile 
+			// because the user doesn't lose control over moving the cropbox with the
+			// mouse if they move the mouse off the image. Apparently Flash itself 
+			// may not even get the mouse up transition, depending on where the user 
+			// moved the mouse (off image, outside Firefox, etc). There is no method
+			// to call to find out if the mouse button is up or down.
+			return;
+		}
+
+		// -----------------------------------------------------------------------
+
+
+		]]>
+	</mx:Script>
+
+
+	<mx:Style>
+
+<!-- Flex supports the following properties:
+	http://livedocs.adobe.com/flex/3/html/help.html?content=styles_03.html
+	Flex supports the following subset of the CSS style properties as defined by the CSS specification:
+    color
+    fontFamily
+    fontSize
+    fontStyle
+    fontWeight
+    paddingBottom
+    paddingLeft
+    paddingRight
+    paddingTop
+    textAlign
+    textDecoration
+    textIndent
+-->
+
+.applyBtnStyle {
+	fontSize: 9px;
+	paddingLeft: 0px;
+	paddingRight: 0px;
+}
+.resetBtnStyle {
+	fontSize: 9px;
+	paddingLeft: 0px;
+	paddingRight: 0px;
+}
+
+
+	</mx:Style>
+
+<!-- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -->
+
+<mx:VBox x="10" y="20" id="vbox1">
+	<mx:HBox id="hbox1">
+		<mx:VBox id="vbox2">
+   	   		<mx:Text id="targ1ImgTxtThumb" visible="true" includeInLayout="true" 
+ 			   		text="Image Crop Effect - Applied to Target Thumbnail"
+  			   		fontWeight="bold" color="blue"/>
+   	   		<mx:Text id="targ1ImgTxt2Thumb" visible="true" includeInLayout="true" 
+					text=
+"- Click in image to reposition crop box anywhere within image.&#13;- Click on crop box edges to resize."
+					fontWeight="normal" color="black"/>
+	    	<mx:Image id="targ1ImgThumb" visible="true" includeInLayout="true"
+					width="{tn1ImgWid}" height="{tn1ImgHt}"
+					source="{targ1ImgBA}"
+       				mouseMove="onMouseOverCropPreview(event)"
+	       			mouseDown="onMouseDownCropPreview(event)"
+       				mouseUp  ="onMouseUpCropPreview(event)"
+       				mouseOut ="onMouseOutCropPreview(event)"
+					/>
+		</mx:VBox>
+<!--
+"- Select Preview to See Effect Applied to Thumbnail Below&#13;- Click on Apply to Apply Effect to Target Image"
+-->
+
+   		<mx:VBox>
+   			<!-- Mouse-interaction-with-graph text area below the graph. -->
+    		<mx:TextArea id="mouseStatsTextArea1"
+   	    			width="75" height="{2*15}" color="black" editable="false"
+   	    			backgroundAlpha="0" borderStyle="none"
+	   	  			text=""
+	   	    		/>
+
+			<mx:HBox>
+				<mx:Button id="applyCropEffectBtn" label="Apply" styleName="applyBtnStyle"
+					toolTip="Apply Crop Effect to Target Image"
+					click="
+						if( cropPreview_defined == false )
+						{
+							mouseDown          = false;
+							ctrlKeyIsDown      = false;
+							shiftKeyIsDown     = false;
+							shiftKeyIsDownPrev = false;
+
+							previewCropCheckBox.selected = false; /* don't show the cropbox anymore */
+
+							cropPreview_defined = true; /* prevent clicking Apply twice */
+
+							/* Redisplay the Target Image, but with Crop Effect applied.*/
+							targ1ImgBD.draw( Application.application.imageControls.targetImg,
+											 matrix1, null,null,null, true );
+
+							cropPreview.apply(); /* copy pixels from targ1ImgBD using cropBoxRect into croppedTargImageBD */
+							targ1ImgBA.bitmapData = targ1ImgBD;
+							targ1ImgThumb.source  = targ1ImgBA;
+
+
+							targ2ImgBD = cropPreview.getCroppedImageRef(); /* get reference to croppedTargImageBD */
+
+							targ2ImgBA.bitmapData = targ2ImgBD;
+							targ2ImgThumb.source  = targ2ImgBA;
+
+							/* Display Crop Effect on thumbnail image 
+							   (if preview is selected) */
+							/* updateCropPreviewThumbnail(); */
+
+							applyCropEffectBtn.toolTip =
+								'Crop Effect Already Applied (Can Only Apply Once)';
+						}
+						"
+					/>
+
+				<mx:Button id="resetCropEffectBtn" label="Reset" styleName="resetBtnStyle"
+					toolTip=
+"Reset Crop Effect to Default Settings&#13;(or press ESC key when mouse is over the image)"
+					click="
+							resetCropEffectAndDisplay();
+						  "
+					/>
+			</mx:HBox>
+
+
+		   	<mx:CheckBox id="previewCropCheckBox" label="Preview"
+				fontWeight="bold" color="black"
+				selected="true" 
+				toolTip="Display Crop Effect in Preview Image at left, if Checked"
+				change="
+					mouseDown          = false;
+					ctrlKeyIsDown      = false;
+					shiftKeyIsDown     = false;
+					shiftKeyIsDownPrev = false;
+
+					/* Display Crop Effect on thumbnail image (if preview is selected) */
+					updateCropPreviewThumbnail();
+	    			"
+	    		/>
+
+		   	<mx:CheckBox id="cropDarkenCheckBox" label="Darken"
+				fontWeight="bold" color="black"
+				selected="true"
+				toolTip="Darken image outside mask in Crop Effect, if Checked (default: Checked)"
+				change="
+					mouseDown          = false;
+					ctrlKeyIsDown      = false;
+					shiftKeyIsDown     = false;
+					shiftKeyIsDownPrev = false;
+
+					if( cropDarkenCheckBox.selected == true ) /* user has enabled Darken checkbox */
+							{	cropPreview_darkenFlag = true;	}
+					else	{	cropPreview_darkenFlag = false;	}
+					cropPreview.setDarkenFlag( cropPreview_darkenFlag );
+
+					/* Display Crop Effect on thumbnail image (if preview is selected) */
+					updateCropPreviewThumbnail();
+	    			"
+	    		/>
+
+   			<mx:TextArea id="cropEffectParmsTextArea"
+    				width="90" height="{4*15}" color="black" editable="false"
+    				backgroundAlpha="0" borderStyle="none"
+    				text=""
+    				/>
+
+   		</mx:VBox>
+	</mx:HBox>
+
+	<mx:HBox id="hbox2">
+		<mx:VBox>
+   	   		<mx:Text id="targ2ImgTxtThumb" visible="true" includeInLayout="true" 
+ 			   		text="Image Crop Effect - Applied to Target Thumbnail"
+  			   		fontWeight="bold" color="blue"/>
+   	   		<mx:Text id="targ2ImgTxt2Thumb" visible="true" includeInLayout="true" 
+					text=
+"- Click in image to reposition crop box anywhere within image.&#13;- Click on crop box edges to resize."
+					fontWeight="normal" color="black"/>
+	    	<mx:Image id="targ2ImgThumb" visible="true" includeInLayout="true"
+					width ="{tn2ImgWid}" height="{tn2ImgHt}"
+					source="{targ2ImgBA}"
+					/>
+		</mx:VBox>
+	</mx:HBox>
+
+</mx:VBox>
+
+<!-- Remember that components at the bottom of this page are
+     on "top" of Flex's hierarchy of visible components and
+     cover up any overlapping components farther up the page.  -->
+
+</mx:VBox> <!-- END OF ... ImageCrop.mxml Canvas -->

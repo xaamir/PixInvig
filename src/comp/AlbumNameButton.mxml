@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Button  xmlns:mx="http://www.adobe.com/2006/mxml" xmlns:comp="comp.*"
+			 width="140" height="25" label="Button" fontSize="13" fontFamily="Arial" textAlign="center"
+			 textRollOverColor="#ffffff" buttonMode="true" useHandCursor="true" focusEnabled="true" initialize="onInit()"
+			   color="#FFFFFF" fillAlphas="[0.44, 1.0, 0.99, 0.99]" fillColors="[#231F16, #900D0D, #231F16, #231F16]"
+			   themeColor="#000000">
+	<mx:Script>
+		
+		<![CDATA[			
+			import actionObj.Consts;
+			import actionObj.image.Album;
+			private var album:Album;
+			
+			public function onInit(): void {
+				height = Consts.ALBUM_NAME_BUTTON_HEIGHT;
+				width = Consts.ALBUM_NAME_BUTTON_WIDTH;
+			}
+			
+			public function getAlbum():Album {
+				return album;
+			}
+			
+			public function setAlbum(_album:Album):void{
+				album=_album;
+			}
+		]]>		
+		
+	</mx:Script>		
+</mx:Button>

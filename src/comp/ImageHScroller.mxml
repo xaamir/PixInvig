@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:mx="http://www.adobe.com/2006/mxml" horizontalScrollPolicy="off" creationComplete="initComponent()">
+	<mx:Script>
+		<![CDATA[
+			import actionObj.event.ScrollComplete;
+			
+			import mx.core.UIComponent;
+			import mx.effects.Move;
+			
+			[Bindable]
+			private var _dataProvider:Object = null;
+			private var scrollTimer:Timer = null;
+			public function set dataProvider(value:Object):void {
+				_dataProvider = value;
+				this.contents.removeAllChildren();
+				for each (var obj:Object in _dataProvider) {
+					var child:* = itemRenderer.newInstance();
+					child.data = obj;
+					this.contents.addChild(child);
+				}
+			}
+			
+			[Bindable]
+			public var itemRenderer:IFactory = null;
+			
+			public static var LEFT:String = "left"
+			public static var RIGHT:String = "right" 
+			
+			private var maxSize:int;
+			
+			[Bindable]
+			private var interval:uint;
+			
+			[Bindable]
+			public var direction:String = RIGHT;
+			public function set dir(value:String):void {
+				direction = value;
+			}
+			
+			private var curr:UIComponent = null;
+			private var elementWidth:Number=0;
+			private var minPosition:Number=0;
+			private var scrollSize:int  =2;//scroll 2 images in one fwd or back
+			private var numofiterations:int = 10;
+			private var maxTotalWidth:int=0;
+			
+			[Bindable]
+			private var mov:Move= new Move();
+			
+			public function initComponent():void {
+				minPosition=(contents.getChildAt(0) as UIComponent).x;
+				elementWidth=(contents.getChildAt(1) as UIComponent).x - (contents.getChildAt(0) as UIComponent).x;
+				maxSize = contents.getChildren().length;
+				maxTotalWidth= (maxSize + 1)*elementWidth;
+			}
+			
+			private function round(inp:Number, factor:int):Number{
+				var ret:Number=inp*(Math.pow(10,1));
+				ret = (Math.round(ret))/10;
+				return ret;
+			}
+			
+			public function onFwd():void{
+				scrollTimer = new Timer(20, scrollSize * numofiterations);
+				direction=LEFT;
+				scrollTimer.addEventListener(TimerEvent.TIMER, marquee);
+				scrollTimer.addEventListener(TimerEvent.TIMER_COMPLETE, scrollComplete);
+				scrollTimer.start();				
+			}
+			
+			public function scrollComplete(e:Event):void{
+				scrollTimer.removeEventListener(TimerEvent.TIMER, marquee);
+				scrollTimer=null;
+				var scrollEvent:ScrollComplete= new ScrollComplete("ScrollCompleteEvent");
+				dispatchEvent(scrollEvent);
+			}
+				
+			public function onBack():void{
+				scrollTimer = new Timer(20, scrollSize * numofiterations);
+				direction=RIGHT;
+				scrollTimer.addEventListener(TimerEvent.TIMER, marquee);
+				scrollTimer.addEventListener(TimerEvent.TIMER_COMPLETE, scrollComplete);
+				scrollTimer.start();								
+			}
+			
+			private function stop():void{             	
+				clearInterval(interval); 
+			}
+			
+			private function playAgain():void{
+				initComponent();
+			}
+			
+			private function marquee(e:Event):void
+			{             	
+				for(var j:int = 1; j < maxSize ;j++)
+				{
+					curr = contents.getChildAt(j) as UIComponent;
+					mov.repeatCount = 1;
+					mov.target = curr;
+					mov.duration = 0;
+					if(direction == LEFT)
+					{
+						leftToRight(j);
+					}  
+					else
+					{
+						rightToLeft(j);
+					}       	
+					mov.play();	     	
+				}  	
+				var maxVal:Number = -1;
+				var maxValIndx:int = -1;
+				for(var k:int = 1; k < maxSize ;k++)//skipping index =0 as that is reserved for 'Normal'
+				{
+					var currX:Number = (contents.getChildAt(k) as UIComponent).x;
+					if(currX>=maxVal){
+						maxVal=currX;
+						maxValIndx=k;
+					}
+					else{
+						break;
+					}
+				}
+				var minValIndex:int=0;
+				if((maxValIndx + 1)==maxSize){
+					minValIndex=1;
+				}
+				else{
+					minValIndex = maxValIndx + 1;
+				}
+				if((contents.getChildAt(minValIndex) as UIComponent).x >= 2*elementWidth){
+					mov.xFrom = (contents.getChildAt(maxValIndx) as UIComponent).x;
+					mov.xTo = (contents.getChildAt(minValIndex) as UIComponent).x - elementWidth;
+					mov.repeatCount = 1;
+					mov.target = (contents.getChildAt(maxValIndx) as UIComponent);
+					mov.duration = 0;
+					mov.play();
+				}
+			}
+			
+			//right-toleft
+			private function leftToRight(j:int):void{
+				var diff:Number=round((elementWidth/numofiterations), 1);
+				mov.xFrom = curr.x;
+				mov.xFrom = round(mov.xFrom, 1);
+				mov.xTo = curr.x - diff;
+				mov.xTo = round(mov.xTo, 1);
+				if(mov.xTo < (minPosition + elementWidth) &&  mov.xTo > 0){
+					mov.xTo-=2*elementWidth;
+					if(mov.xTo < 0){//do not allow going into a negative value, set to the highest value
+						mov.xTo = maxTotalWidth + mov.xTo;
+					}
+				}
+			}
+			
+			private function rightToLeft(j:int):void{
+				var diff:Number=round((elementWidth/numofiterations), 1);
+				mov.xFrom = curr.x;
+				mov.xFrom = round(mov.xFrom, 1);
+				mov.xTo = curr.x + diff;
+				mov.xTo = round(mov.xTo, 1);
+			}
+			
+			public function  setHorizontalSpace(space:int):void{
+				contents.setStyle("horizontalGap" , space);
+			}
+			
+		]]>
+	</mx:Script>
+	<mx:HBox id="contents"  clipContent="true"   horizontalScrollPolicy="off" verticalScrollPolicy="off" ></mx:HBox>	
+</mx:Canvas>

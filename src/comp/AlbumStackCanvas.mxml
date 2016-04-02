@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:mx="http://www.adobe.com/2006/mxml"
+		   xmlns:comp="comp.*"
+		   width="200" height="215" horizontalScrollPolicy="off" verticalScrollPolicy="off" initialize="onInit()">
+	<comp:AlbumImg id="AlbumImgBottom" x="45.6" y="11.25" buttonMode="true" click="onClickAlbum()"
+				   source="{data.getBottomImageSrc(2)}" useHandCursor="true"/>
+	<comp:AlbumImg id="AlbumImgMiddle" x="9.75" y="24.85" buttonMode="true" click="onClickAlbum()"
+				   source="{data.getMidImageSrc(-2)}" useHandCursor="true"/>
+	<comp:AlbumImg id="AlbumImgTop" x="25.5" y="34" buttonMode="true" click="onClickAlbum()"
+				   mouseOut="onMouseOut()" mouseOver="onMouseRollOver()"
+				   source="{data.getTopImageSrc(3.4)}" useHandCursor="true"/>
+	<mx:Label id="AlbumName" x="4" y="174.25" width="190" height="22.95" buttonMode="true"
+			  click="onClickAlbum()" color="#FFFFFF" fontAntiAliasType="advanced" fontFamily="Arial"
+			  fontSize="16" text="{data.getName()}" useHandCursor="true"/>
+	<mx:Script>	
+		<![CDATA[
+			import actionObj.image.Album;
+			
+			import mx.core.Application;
+			import mx.core.FlexGlobals;
+		
+			public function onInit():void{
+				var f:DropShadowFilter = new DropShadowFilter(5,90,0,.4);
+				var myFilters:Array = new Array();
+				myFilters.push(f);
+				AlbumName.filters=myFilters;
+			}
+			
+			public function onMouseRollOver():void{
+				AlbumImgTop.source = data.getTopImageSrc(0);					
+				AlbumImgMiddle.source = data.getMidImageSrc(0);					
+				AlbumImgBottom.source = data.getBottomImageSrc(0);					
+				AlbumName.filters=null;
+				var f:DropShadowFilter = new DropShadowFilter(7,56,0,.8);
+				var myFilters:Array = new Array();
+				myFilters.push(f);
+				AlbumName.filters=myFilters;
+				AlbumImgTop.filters=null;
+				AlbumImgTop.filters=myFilters;
+			}
+			
+			public function onMouseOut():void{
+				AlbumImgTop.source = data.getTopImageSrc(3.4);					
+				AlbumImgMiddle.source = data.getMidImageSrc(-2);					
+				AlbumImgBottom.source = data.getBottomImageSrc(2);					
+				AlbumName.filters=null;
+				var f:DropShadowFilter = new DropShadowFilter(5,90,0,.4);
+				var myFilters:Array = new Array();
+				myFilters.push(f);
+				AlbumName.filters=myFilters;
+				AlbumImgTop.filters=null;
+				AlbumImgTop.filters=myFilters;
+			}
+
+			public function onClickAlbum():void{
+				var album:Album = Album(data);
+				FlexGlobals.topLevelApplication.loadAlbum(album);			
+			}
+		]]>		
+	</mx:Script>
+</mx:Canvas>

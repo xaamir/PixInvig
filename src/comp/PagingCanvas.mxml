@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:mx="http://www.adobe.com/2006/mxml" width="63" height="42">
+	<mx:Label x="17" y="7" width="22" fontSize="15" text="of" height="30"/>
+	<mx:Label id="TotalPages" x="38" y="4" width="15" height="35" fontSize="18" text="1"/>
+	<mx:Label id="PageNum" x="1" y="4" width="18" height="35" fontSize="18" text="1"/>
+</mx:Canvas>

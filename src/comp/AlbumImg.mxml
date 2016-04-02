@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Image xmlns:mx="http://www.adobe.com/2006/mxml"
+		  width="145" height="145" x="0" y="0" buttonMode="true" useHandCursor="true" focusEnabled="true" 
+		  autoLoad="true" scaleContent="false" initialize="onInit()">
+	
+	<mx:Script>
+		<![CDATA[			
+			import actionObj.image.Album;
+			
+			public var album:Album;
+			public function onInit():void{
+				var f:DropShadowFilter = new DropShadowFilter(5,90,0,.7);
+				var myFilters:Array = new Array();
+				myFilters.push(f);
+				filters=myFilters;
+			}
+			
+			public function setAlbum(_album:Album):void{
+				album = _album;
+			}
+			
+			public function getAlbum():Album {
+				return album;
+			}
+		]]>		
+	
+	</mx:Script>		
+</mx:Image>

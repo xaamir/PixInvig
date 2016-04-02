@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:TitleWindow xmlns:mx="http://www.adobe.com/2006/mxml"
+				xmlns:controls="controls.*"
+				xmlns:comp="comp.*"
+				width="250" height="38" backgroundAlpha="0.6" backgroundColor="#181818"
+				borderStyle="none" borderThickness="0" borderThicknessBottom="0"
+				borderThicknessLeft="0" borderThicknessRight="0" borderThicknessTop="0"
+				cornerRadius="0" headerHeight="0" horizontalScrollPolicy="off" layout="absolute"
+				verticalScrollPolicy="off">	
+	<mx:TextArea id="controlText" x="2" y="6" width="120" height="28" backgroundAlpha="0" borderThickness="0"
+				 borderStyle="none" color="#E3E3E3" cornerRadius="4" fontFamily="Arial" fontSize="13"
+				 fontStyle="normal" fontWeight="normal"
+				 text="Upload completed!"
+				 textAlign="center"/>
+	<comp:InviteFriends x="127" y="4"  click="onInviteFriends()" enabled="true"	buttonMode="true"  useHandCursor="true"/>	
+	<comp:CloseButton buttonMode="true" width="15" height="15" useHandCursor="true" x="234" y="0"/>
+	<mx:Script>	
+		<![CDATA[
+			import mx.core.FlexGlobals;
+			public function onInviteFriends():void{
+				FlexGlobals.topLevelApplication.inviteFriends();
+			}
+		]]>		
+	</mx:Script>	
+</mx:TitleWindow>

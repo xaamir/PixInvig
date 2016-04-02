@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:TileList xmlns:mx="http://www.adobe.com/2006/mxml"
+			 width="700" height="480" backgroundAlpha="0" borderStyle="none" borderThickness="0" focusEnabled="false" selectable="false"
+			 columnCount="3" direction="horizontal" focusRect="false" horizontalScrollPolicy="off"
+			 itemRenderer="comp.AlbumStackCanvas" paddingBottom="0" paddingLeft="0" paddingRight="0"
+			 paddingTop="0" rowCount="2" useRollOver="false" verticalScrollPolicy="off">	
+</mx:TileList>

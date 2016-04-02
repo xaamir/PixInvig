@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Button initialize="onInit()" mouseOver="onMouseOver()" useHandCursor="true" buttonMode="true"  
+		   creationComplete="onComplete()" mouseOut="onMouseOut()" xmlns:mx="http://www.adobe.com/2006/mxml">
+	<mx:Script>
+		<![CDATA[
+			[Embed("assets/skin/desat_confirm.png")]
+			private const up_skin:Class;
+			
+			private function onMouseOut():void{
+				filters=null;
+			}
+			
+			public function onComplete():void {
+				drawFocus(true);				
+			}
+			
+			private function onMouseOver():void{
+				var f:DropShadowFilter = new DropShadowFilter(2,90,0,.6);
+				var myFilters:Array = new Array();
+				myFilters.push(f);
+				filters=myFilters;				
+			}
+			
+			public function enableFlag(flag:Boolean):void{
+				if(flag==true){
+					enabled=true;
+					useHandCursor=true;
+					mouseEnabled=true;
+					alpha=1;
+				}
+				else{
+					enabled=false;
+					useHandCursor=false;
+					mouseEnabled=false;
+					alpha=0.5;					
+				}
+			}
+			
+			private function onInit():void{
+				setStyle("skin", up_skin);
+				setStyle("upSkin", up_skin);
+				setStyle("overSkin", up_skin);
+				setStyle("downSkin", up_skin);
+				setStyle("disabledSkin", up_skin);
+			}
+		]]>		
+	</mx:Script>
+</mx:Button>
